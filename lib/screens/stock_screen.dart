@@ -183,15 +183,15 @@ class _StockScreenState extends State<StockScreen> {
                         // Hapus gambar lama di Storage jika ada (Mode Edit)
                         if (isEditing && product['image_url'] != null) {
                           final oldFileName = Uri.parse(product['image_url']).pathSegments.last;
-                          await _supabase.storage.from('product_images').remove([oldFileName]);
+                          await _supabase.storage.from('product_image').remove([oldFileName]);
                         }
 
                         // Upload gambar baru
                         final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.${imageExtension ?? 'jpg'}';
-                        await _supabase.storage.from('product_images').uploadBinary(fileName, selectedImageBytes!);
+                        await _supabase.storage.from('product_image').uploadBinary(fileName, selectedImageBytes!);
                         
                         // Dapatkan URL publik gambar
-                        finalImageUrl = _supabase.storage.from('product_images').getPublicUrl(fileName);
+                        finalImageUrl = _supabase.storage.from('product_image').getPublicUrl(fileName);
                       }
 
                       // Simpan data ke Database
@@ -262,7 +262,7 @@ class _StockScreenState extends State<StockScreen> {
         // 1. Hapus gambar dari Storage (jika ada)
         if (product['image_url'] != null) {
           final fileName = Uri.parse(product['image_url']).pathSegments.last;
-          await _supabase.storage.from('product_images').remove([fileName]);
+          await _supabase.storage.from('product_image').remove([fileName]);
         }
 
         // 2. Hapus data dari Database
