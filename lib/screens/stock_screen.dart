@@ -186,20 +186,16 @@ class _StockScreenState extends State<StockScreen> {
                     const SizedBox(height: 20),
 
                     // Dropdown Kategori (Store/Stand vs Eden)
-                    DropdownButtonFormField<String>(
+                   DropdownButtonFormField<String>(
                       value: selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Lokasi Penyimpanan', 
-                        prefixIcon: Icon(Icons.location_on_outlined)
-                      ),
+                      decoration: const InputDecoration(labelText: 'Lokasi Penyimpanan', prefixIcon: Icon(Icons.location_on_outlined)),
                       items: const [
                         DropdownMenuItem(value: 'store_stand', child: Text('Store & Stand')),
                         DropdownMenuItem(value: 'eden', child: Text('Eden (Gudang)')),
+                        DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan')), // <--- TAMBAH INI
                       ],
                       onChanged: (val) {
-                        setStateDialog(() {
-                          selectedCategory = val!;
-                        });
+                        setStateDialog(() { selectedCategory = val!; });
                       },
                     ),
                     const SizedBox(height: 10),
@@ -361,7 +357,7 @@ class _StockScreenState extends State<StockScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, 
+      length: 3, 
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Manajemen Stok"),
@@ -374,13 +370,15 @@ class _StockScreenState extends State<StockScreen> {
             tabs: [
               Tab(text: "Store & Stand"),
               Tab(text: "Eden"),
+              Tab(text: "Penyewaan"),
             ],
           ),
         ),
         body: TabBarView(
           children: [
             _buildProductList('store_stand'), 
-            _buildProductList('eden'),        
+            _buildProductList('eden'),    
+            _buildProductList('penyewaan'),    
           ],
         ),
         floatingActionButton: FloatingActionButton(
