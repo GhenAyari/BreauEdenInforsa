@@ -174,6 +174,7 @@ class _PosScreenState extends State<PosScreen> {
           'product_name': item['name'],
           'qty': item['qty'],
           'price': item['price'],
+          'modal': item['modal'] ?? 0, // TITIK BEDAH 1: Simpan modal saat bayar
           'total_price': item['qty'] * item['price'],
         });
 
@@ -197,7 +198,7 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // --- FUNGSI EKSPOR CSV ---
+  // --- FUNGSI EKSPOR CSV (TITIK BEDAH 2) ---
   Future<void> _exportToCSV(Map<String, dynamic> session) async {
     List<List<dynamic>> rows = [];
 
@@ -208,13 +209,14 @@ class _PosScreenState extends State<PosScreen> {
     rows.add(['Modal Awal (Tunai)', session['modal_awal']]);
     rows.add([]); 
 
-    // Header Tabel ditambah Link Bukti QRIS
-    rows.add(['Nama Barang', 'Jumlah (Qty)', 'Harga Satuan', 'Total Harga', 'Metode Bayar', 'Link Bukti QRIS']);
+    // Header Tabel ditambah Kolom Modal
+    rows.add(['Nama Barang', 'Jumlah (Qty)', 'Harga Satuan', 'Modal Satuan', 'Total Harga', 'Metode Bayar', 'Link Bukti QRIS']);
 
     final transactions = session['transactions'] as List;
     double totalTunai = 0;
     double totalQRIS = 0;
-    double grandTotal = 0;
+    double grandTotalPemasukan = 0;
+    double grandTotalModal = 0;
 
     for (var t in transactions) {
       if (t['payment_method'].toString().contains('Tunai')) {
@@ -222,16 +224,20 @@ class _PosScreenState extends State<PosScreen> {
       } else if (t['payment_method'].toString().contains('QRIS')) {
         totalQRIS += t['total_amount'];
       }
-      grandTotal += t['total_amount'];
+      grandTotalPemasukan += t['total_amount'];
 
       for (var item in t['transaction_items']) {
+        double modalItem = (item['modal'] ?? 0).toDouble(); // Ambil nilai modal dari database
+        grandTotalModal += (modalItem * item['qty']); // Hitung total modal terpakai
+
         rows.add([
           item['product_name'],
           item['qty'],
           item['price'],
+          modalItem, // Masukkan Modal Satuan ke baris CSV
           item['total_price'],
           t['payment_method'],
-          t['proof_url'] ?? '-', // Memasukkan URL bukti jika ada
+          t['proof_url'] ?? '-', 
         ]);
       }
     }
@@ -241,9 +247,11 @@ class _PosScreenState extends State<PosScreen> {
     rows.add(['RINGKASAN PEMBAYARAN']);
     rows.add(['Total Pemasukan Tunai', totalTunai]);
     rows.add(['Total Pemasukan QRIS', totalQRIS]);
-    rows.add(['GRAND TOTAL PENDAPATAN', grandTotal]);
+    rows.add(['GRAND TOTAL PENDAPATAN (A)', grandTotalPemasukan]);
+    rows.add(['TOTAL MODAL BARANG (B)', grandTotalModal]);
+    rows.add(['LABA BERSIH (A - B)', grandTotalPemasukan - grandTotalModal]);
     rows.add([]); 
-    rows.add(['TOTAL FISIK UANG DI KOTAK (Modal + Tunai)', (session['modal_awal'] + totalTunai)]);
+    rows.add(['TOTAL FISIK UANG DI KOTAK (Modal Awal + Tunai)', (session['modal_awal'] + totalTunai)]);
 
     String csvData = const ListToCsvConverter().convert(rows);
 
@@ -381,14 +389,14 @@ class _PosScreenState extends State<PosScreen> {
               const Divider(),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  // Ambil proof_url juga dari database
+                  // TITIK BEDAH 3: Tambahkan kata "modal" di query ini
                   future: _supabase.from('sessions').select('''
                     *,
                     transactions (
                       total_amount,
                       payment_method,
                       proof_url,
-                      transaction_items (product_name, qty, price, total_price)
+                      transaction_items (product_name, qty, price, modal, total_price)
                     )
                   ''').eq('status', 'closed').order('closed_at', ascending: false),
                   builder: (context, snapshot) {
