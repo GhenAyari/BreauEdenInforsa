@@ -13,18 +13,73 @@ class StockScreen extends StatefulWidget {
 
 class _StockScreenState extends State<StockScreen> {
   SupabaseClient get _supabase => Supabase.instance.client;
-  late final Stream<List<Map<String, dynamic>>> _productsStream;
   
   // Inisialisasi Image Picker
   final ImagePicker _picker = ImagePicker();
 
-  @override
-  void initState() {
-    super.initState();
-    _productsStream = _supabase
-        .from('products')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: true);
+  // FUNGSI BARU: Helper untuk membuat List Barang berdasarkan Kategori
+  Widget _buildProductList(String category) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _supabase
+          .from('products')
+          .stream(primaryKey: ['id'])
+          .eq('category', category) // FILTER: Hanya ambil data sesuai kategori tab
+          .order('created_at', ascending: true),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('Belum ada data barang di kategori ini.'));
+        }
+
+        final products = snapshot.data!;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: products.length,
+          itemBuilder: (_, index) {
+            final product = products[index];
+            
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: product['image_url'] != null
+                      ? NetworkImage(product['image_url'])
+                      : null,
+                  child: product['image_url'] == null 
+                      ? const Icon(Icons.inventory_2, color: Colors.grey)
+                      : null,
+                ),
+                title: Text(
+                  product['name'],
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text("Stok: ${product['stock']} | Rp ${product['price']}"),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: AppColors.primary),
+                      onPressed: () => _showFormDialog(product: product),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _deleteProduct(product),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        );
+      },
+    );
   }
 
   // Fungsi untuk menampilkan Pop-up Form
@@ -35,6 +90,9 @@ class _StockScreenState extends State<StockScreen> {
     final priceController = TextEditingController(text: isEditing ? product['price'].toString() : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
     
+    // Variabel untuk menyimpan kategori (Default: store_stand)
+    String selectedCategory = isEditing ? (product['category'] ?? 'store_stand') : 'store_stand';
+    
     // Variabel untuk menyimpan gambar
     Uint8List? selectedImageBytes;
     String? currentImageUrl = isEditing ? product['image_url'] : null;
@@ -43,19 +101,17 @@ class _StockScreenState extends State<StockScreen> {
     await showDialog(
       context: context,
       builder: (context) {
-        // Gunakan StatefulBuilder agar UI di dalam pop-up bisa di-refresh (saat milih foto)
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             
-            // Fungsi untuk pilih gambar
             Future<void> pickImage(ImageSource source) async {
               final XFile? image = await _picker.pickImage(source: source);
               if (image != null) {
-                final bytes = await image.readAsBytes(); // Harus pakai bytes untuk Web
+                final bytes = await image.readAsBytes(); 
                 setStateDialog(() {
                   selectedImageBytes = bytes;
-                  currentImageUrl = null; // Sembunyikan foto lama jika milih baru
-                  imageExtension = image.name.split('.').last; // Ambil ekstensi (jpg/png)
+                  currentImageUrl = null; 
+                  imageExtension = image.name.split('.').last; 
                 });
               }
             }
@@ -70,7 +126,6 @@ class _StockScreenState extends State<StockScreen> {
                     // Area Foto
                     GestureDetector(
                       onTap: () {
-                        // Munculkan pilihan Galeri atau Kamera
                         showModalBottomSheet(
                           context: context,
                           builder: (_) => SafeArea(
@@ -127,6 +182,25 @@ class _StockScreenState extends State<StockScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    // Dropdown Kategori (Store/Stand vs Eden)
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'Lokasi Penyimpanan', 
+                        prefixIcon: Icon(Icons.location_on_outlined)
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'store_stand', child: Text('Store & Stand')),
+                        DropdownMenuItem(value: 'eden', child: Text('Eden (Gudang)')),
+                      ],
+                      onChanged: (val) {
+                        setStateDialog(() {
+                          selectedCategory = val!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Nama Barang', prefixIcon: Icon(Icons.inventory_2_outlined)),
@@ -164,7 +238,6 @@ class _StockScreenState extends State<StockScreen> {
                       return;
                     }
 
-                    // Loading indicator
                     showDialog(
                       context: context, 
                       barrierDismissible: false,
@@ -178,42 +251,36 @@ class _StockScreenState extends State<StockScreen> {
                     String? finalImageUrl = isEditing ? product['image_url'] : null;
 
                     try {
-                      // Jika user memilih gambar baru, upload ke Storage dulu
                       if (selectedImageBytes != null) {
-                        // Hapus gambar lama di Storage jika ada (Mode Edit)
                         if (isEditing && product['image_url'] != null) {
                           final oldFileName = Uri.parse(product['image_url']).pathSegments.last;
                           await _supabase.storage.from('product_image').remove([oldFileName]);
                         }
 
-                        // Upload gambar baru
                         final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.${imageExtension ?? 'jpg'}';
                         await _supabase.storage.from('product_image').uploadBinary(fileName, selectedImageBytes!);
                         
-                        // Dapatkan URL publik gambar
                         finalImageUrl = _supabase.storage.from('product_image').getPublicUrl(fileName);
                       }
 
-                      // Simpan data ke Database
+                      // Susun data yang akan dikirim (termasuk Kategori)
+                      final productData = {
+                        'name': name,
+                        'price': price,
+                        'stock': stock,
+                        'category': selectedCategory, // Simpan kategori ke database
+                        'image_url': finalImageUrl,
+                      };
+
                       if (isEditing) {
-                        await _supabase.from('products').update({
-                          'name': name,
-                          'price': price,
-                          'stock': stock,
-                          'image_url': finalImageUrl,
-                        }).eq('id', product['id']);
+                        await _supabase.from('products').update(productData).eq('id', product['id']);
                       } else {
-                        await _supabase.from('products').insert({
-                          'name': name,
-                          'price': price,
-                          'stock': stock,
-                          'image_url': finalImageUrl,
-                        });
+                        await _supabase.from('products').insert(productData);
                       }
                       
                       if (mounted) {
-                        Navigator.pop(context); // Tutup loading
-                        Navigator.pop(context); // Tutup dialog form
+                        Navigator.pop(context); 
+                        Navigator.pop(context); 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(isEditing ? 'Barang berhasil diubah!' : 'Barang baru ditambahkan!'),
@@ -223,7 +290,7 @@ class _StockScreenState extends State<StockScreen> {
                       }
                     } catch (e) {
                       if (mounted) {
-                        Navigator.pop(context); // Tutup loading
+                        Navigator.pop(context); 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
                         );
@@ -240,7 +307,6 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
-  // Fungsi menghapus barang (dan menghapus foto dari Storage)
   Future<void> _deleteProduct(Map<String, dynamic> product) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -259,13 +325,11 @@ class _StockScreenState extends State<StockScreen> {
 
     if (confirm == true) {
       try {
-        // 1. Hapus gambar dari Storage (jika ada)
         if (product['image_url'] != null) {
           final fileName = Uri.parse(product['image_url']).pathSegments.last;
           await _supabase.storage.from('product_image').remove([fileName]);
         }
 
-        // 2. Hapus data dari Database
         await _supabase.from('products').delete().eq('id', product['id']);
         
         if (mounted) {
@@ -281,74 +345,37 @@ class _StockScreenState extends State<StockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manajemen Stok"),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _productsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Belum ada data barang.'));
-          }
-
-          final products = snapshot.data!;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: products.length,
-            itemBuilder: (_, index) {
-              final product = products[index];
-              
-              return Card(
-                child: ListTile(
-                  // Tambahkan UI Foto di sebelah kiri List
-                  leading: CircleAvatar(
-                    radius: 25,
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage: product['image_url'] != null
-                        ? NetworkImage(product['image_url'])
-                        : null,
-                    child: product['image_url'] == null 
-                        ? const Icon(Icons.inventory_2, color: Colors.grey)
-                        : null,
-                  ),
-                  title: Text(
-                    product['name'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text("Stok: ${product['stock']} | Rp ${product['price']}"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: AppColors.primary),
-                        onPressed: () => _showFormDialog(product: product),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _deleteProduct(product), // Kirim seluruh object product
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showFormDialog(), 
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+    // Gunakan DefaultTabController untuk membuat TabBar
+    return DefaultTabController(
+      length: 2, // Ada 2 Tab
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Manajemen Stok"),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          // Tambahkan TabBar di bagian bawah AppBar
+          bottom: const TabBar(
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.white,
+            tabs: [
+              Tab(text: "Store & Stand"),
+              Tab(text: "Eden"),
+            ],
+          ),
+        ),
+        // TabBarView untuk menampilkan isi yang berbeda di setiap tab
+        body: TabBarView(
+          children: [
+            _buildProductList('store_stand'), // Tab 1
+            _buildProductList('eden'),        // Tab 2
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showFormDialog(), 
+          backgroundColor: AppColors.primary,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
       ),
     );
   }
