@@ -3,6 +3,7 @@ import '../core/colors.dart';
 import '../widgets/revenue_card.dart';
 import '../widgets/action_card.dart';
 import 'rental_screen.dart'; // Sudah benar import-nya
+import 'preorder_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -49,11 +50,16 @@ class DashboardScreen extends StatelessWidget {
                   },
                 ),
                 
-                // Kotak Pre-Order
-                const ActionCard(
+      
+                ActionCard(
                   title: "Pre-Order", 
                   icon: Icons.receipt_long,
-                  // Nanti kalau halamannya udah ada, tinggal tambahin onTap di sini
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const PreOrderScreen()),
+                    );
+                  },
                 ),
                 
               ],
