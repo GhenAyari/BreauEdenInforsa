@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import '../core/colors.dart';
 
 class StockScreen extends StatefulWidget {
@@ -10,126 +12,236 @@ class StockScreen extends StatefulWidget {
 }
 
 class _StockScreenState extends State<StockScreen> {
-  // Pindahkan pemanggilan client ke getter agar selalu fresh
   SupabaseClient get _supabase => Supabase.instance.client;
-  
-  // Stream untuk mendengarkan perubahan data
   late final Stream<List<Map<String, dynamic>>> _productsStream;
+  
+  // Inisialisasi Image Picker
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi stream di dalam initState
     _productsStream = _supabase
         .from('products')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: true);
   }
 
-  // Fungsi untuk menampilkan Pop-up Form (Bisa untuk Tambah & Edit)
+  // Fungsi untuk menampilkan Pop-up Form
   Future<void> _showFormDialog({Map<String, dynamic>? product}) async {
     final isEditing = product != null; 
     
     final nameController = TextEditingController(text: isEditing ? product['name'] : '');
     final priceController = TextEditingController(text: isEditing ? product['price'].toString() : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
+    
+    // Variabel untuk menyimpan gambar
+    Uint8List? selectedImageBytes;
+    String? currentImageUrl = isEditing ? product['image_url'] : null;
+    String? imageExtension;
 
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(isEditing ? 'Edit Barang' : 'Tambah Barang Baru', 
-              style: const TextStyle(fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Nama Barang', prefixIcon: Icon(Icons.inventory_2_outlined)),
+        // Gunakan StatefulBuilder agar UI di dalam pop-up bisa di-refresh (saat milih foto)
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            
+            // Fungsi untuk pilih gambar
+            Future<void> pickImage(ImageSource source) async {
+              final XFile? image = await _picker.pickImage(source: source);
+              if (image != null) {
+                final bytes = await image.readAsBytes(); // Harus pakai bytes untuk Web
+                setStateDialog(() {
+                  selectedImageBytes = bytes;
+                  currentImageUrl = null; // Sembunyikan foto lama jika milih baru
+                  imageExtension = image.name.split('.').last; // Ambil ekstensi (jpg/png)
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(isEditing ? 'Edit Barang' : 'Tambah Barang Baru', 
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Area Foto
+                    GestureDetector(
+                      onTap: () {
+                        // Munculkan pilihan Galeri atau Kamera
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (_) => SafeArea(
+                            child: Wrap(
+                              children: [
+                                ListTile(
+                                  leading: const Icon(Icons.photo_library),
+                                  title: const Text('Galeri'),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    pickImage(ImageSource.gallery);
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.camera_alt),
+                                  title: const Text('Kamera'),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    pickImage(ImageSource.camera);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        height: 120,
+                        width: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[400]!),
+                        ),
+                        child: selectedImageBytes != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.memory(selectedImageBytes!, fit: BoxFit.cover),
+                              )
+                            : currentImageUrl != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(currentImageUrl!, fit: BoxFit.cover),
+                                  )
+                                : const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text('Tambah Foto', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    ],
+                                  ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Nama Barang', prefixIcon: Icon(Icons.inventory_2_outlined)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: priceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Harga (Rp)', prefixIcon: Icon(Icons.attach_money)),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: stockController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Jumlah Stok', prefixIcon: Icon(Icons.numbers)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: priceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Harga (Rp)', prefixIcon: Icon(Icons.attach_money)),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context), 
+                  child: const Text('Batal', style: TextStyle(color: AppColors.textLight)),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: stockController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Jumlah Stok', prefixIcon: Icon(Icons.numbers)),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Nama, Harga, dan Stok wajib diisi!'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+
+                    // Loading indicator
+                    showDialog(
+                      context: context, 
+                      barrierDismissible: false,
+                      builder: (context) => const Center(child: CircularProgressIndicator()),
+                    );
+
+                    final name = nameController.text;
+                    final price = num.tryParse(priceController.text) ?? 0;
+                    final stock = int.tryParse(stockController.text) ?? 0;
+                    
+                    String? finalImageUrl = isEditing ? product['image_url'] : null;
+
+                    try {
+                      // Jika user memilih gambar baru, upload ke Storage dulu
+                      if (selectedImageBytes != null) {
+                        // Hapus gambar lama di Storage jika ada (Mode Edit)
+                        if (isEditing && product['image_url'] != null) {
+                          final oldFileName = Uri.parse(product['image_url']).pathSegments.last;
+                          await _supabase.storage.from('product_images').remove([oldFileName]);
+                        }
+
+                        // Upload gambar baru
+                        final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.${imageExtension ?? 'jpg'}';
+                        await _supabase.storage.from('product_images').uploadBinary(fileName, selectedImageBytes!);
+                        
+                        // Dapatkan URL publik gambar
+                        finalImageUrl = _supabase.storage.from('product_images').getPublicUrl(fileName);
+                      }
+
+                      // Simpan data ke Database
+                      if (isEditing) {
+                        await _supabase.from('products').update({
+                          'name': name,
+                          'price': price,
+                          'stock': stock,
+                          'image_url': finalImageUrl,
+                        }).eq('id', product['id']);
+                      } else {
+                        await _supabase.from('products').insert({
+                          'name': name,
+                          'price': price,
+                          'stock': stock,
+                          'image_url': finalImageUrl,
+                        });
+                      }
+                      
+                      if (mounted) {
+                        Navigator.pop(context); // Tutup loading
+                        Navigator.pop(context); // Tutup dialog form
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isEditing ? 'Barang berhasil diubah!' : 'Barang baru ditambahkan!'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        Navigator.pop(context); // Tutup loading
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Simpan'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context), 
-              child: const Text('Batal', style: TextStyle(color: AppColors.textLight)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                // Validasi
-                if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Semua kolom wajib diisi!'), backgroundColor: Colors.red),
-                  );
-                  return;
-                }
-
-                final name = nameController.text;
-                final price = num.tryParse(priceController.text) ?? 0;
-                final stock = int.tryParse(stockController.text) ?? 0;
-
-                try {
-                  if (isEditing) {
-                    // Pakai _supabase langsung (yang sekarang berupa getter)
-                    await _supabase.from('products').update({
-                      'name': name,
-                      'price': price,
-                      'stock': stock,
-                    }).eq('id', product['id']);
-                  } else {
-                    await _supabase.from('products').insert({
-                      'name': name,
-                      'price': price,
-                      'stock': stock,
-                    });
-                  }
-                  
-                  if (mounted) {
-                    Navigator.pop(context); // Tutup dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(isEditing ? 'Barang berhasil diubah!' : 'Barang baru ditambahkan!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  print("Error Supabase: $e"); // Cetak error di console untuk debugging
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Terjadi kesalahan, cek koneksi internet.'), backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
+            );
+          }
         );
       },
     );
   }
 
-  // Fungsi tambahan untuk menghapus barang
-  Future<void> _deleteProduct(String id) async {
+  // Fungsi menghapus barang (dan menghapus foto dari Storage)
+  Future<void> _deleteProduct(Map<String, dynamic> product) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -147,10 +259,18 @@ class _StockScreenState extends State<StockScreen> {
 
     if (confirm == true) {
       try {
-        await _supabase.from('products').delete().eq('id', id);
+        // 1. Hapus gambar dari Storage (jika ada)
+        if (product['image_url'] != null) {
+          final fileName = Uri.parse(product['image_url']).pathSegments.last;
+          await _supabase.storage.from('product_images').remove([fileName]);
+        }
+
+        // 2. Hapus data dari Database
+        await _supabase.from('products').delete().eq('id', product['id']);
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Barang berhasil dihapus'), backgroundColor: Colors.red),
+            const SnackBar(content: Text('Barang dan foto berhasil dihapus'), backgroundColor: Colors.red),
           );
         }
       } catch (e) {
@@ -190,6 +310,17 @@ class _StockScreenState extends State<StockScreen> {
               
               return Card(
                 child: ListTile(
+                  // Tambahkan UI Foto di sebelah kiri List
+                  leading: CircleAvatar(
+                    radius: 25,
+                    backgroundColor: Colors.grey[200],
+                    backgroundImage: product['image_url'] != null
+                        ? NetworkImage(product['image_url'])
+                        : null,
+                    child: product['image_url'] == null 
+                        ? const Icon(Icons.inventory_2, color: Colors.grey)
+                        : null,
+                  ),
                   title: Text(
                     product['name'],
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -204,7 +335,7 @@ class _StockScreenState extends State<StockScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _deleteProduct(product['id']),
+                        onPressed: () => _deleteProduct(product), // Kirim seluruh object product
                       ),
                     ],
                   ),
