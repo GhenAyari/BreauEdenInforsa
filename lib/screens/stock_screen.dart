@@ -17,13 +17,13 @@ class _StockScreenState extends State<StockScreen> {
   // Inisialisasi Image Picker
   final ImagePicker _picker = ImagePicker();
 
-  // FUNGSI BARU: Helper untuk membuat List Barang berdasarkan Kategori
+  // FUNGSI: Helper untuk membuat List Barang berdasarkan Kategori
   Widget _buildProductList(String category) {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _supabase
           .from('products')
           .stream(primaryKey: ['id'])
-          .eq('category', category) // FILTER: Hanya ambil data sesuai kategori tab
+          .eq('category', category) 
           .order('created_at', ascending: true),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -60,7 +60,8 @@ class _StockScreenState extends State<StockScreen> {
                   product['name'],
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text("Stok: ${product['stock']} | Rp ${product['price']}"),
+                // TAMPILAN DIPERBARUI: Menampilkan Modal juga
+                subtitle: Text("Stok: ${product['stock']} | Harga: Rp ${product['price']} | Modal: Rp ${product['modal'] ?? 0}"),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -88,6 +89,8 @@ class _StockScreenState extends State<StockScreen> {
     
     final nameController = TextEditingController(text: isEditing ? product['name'] : '');
     final priceController = TextEditingController(text: isEditing ? product['price'].toString() : '');
+    // CONTROLLER BARU: Untuk Modal
+    final modalController = TextEditingController(text: isEditing ? (product['modal']?.toString() ?? '0') : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
     
     // Variabel untuk menyimpan kategori (Default: store_stand)
@@ -209,9 +212,18 @@ class _StockScreenState extends State<StockScreen> {
                     TextField(
                       controller: priceController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Harga (Rp)', prefixIcon: Icon(Icons.attach_money)),
+                      decoration: const InputDecoration(labelText: 'Harga Jual (Rp)', prefixIcon: Icon(Icons.sell_outlined)),
                     ),
                     const SizedBox(height: 10),
+                    
+                    // INPUT BARU: Kolom Modal
+                    TextField(
+                      controller: modalController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Modal Satuan (Rp)', prefixIcon: Icon(Icons.savings_outlined)),
+                    ),
+                    const SizedBox(height: 10),
+
                     TextField(
                       controller: stockController,
                       keyboardType: TextInputType.number,
@@ -231,9 +243,10 @@ class _StockScreenState extends State<StockScreen> {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
-                    if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                    // Validasi bertambah: Modal wajib diisi
+                    if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty || modalController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Nama, Harga, dan Stok wajib diisi!'), backgroundColor: Colors.red),
+                        const SnackBar(content: Text('Nama, Harga, Modal, dan Stok wajib diisi!'), backgroundColor: Colors.red),
                       );
                       return;
                     }
@@ -246,6 +259,7 @@ class _StockScreenState extends State<StockScreen> {
 
                     final name = nameController.text;
                     final price = num.tryParse(priceController.text) ?? 0;
+                    final modal = num.tryParse(modalController.text) ?? 0; // TANGKAP INPUT MODAL
                     final stock = int.tryParse(stockController.text) ?? 0;
                     
                     String? finalImageUrl = isEditing ? product['image_url'] : null;
@@ -263,12 +277,13 @@ class _StockScreenState extends State<StockScreen> {
                         finalImageUrl = _supabase.storage.from('product_image').getPublicUrl(fileName);
                       }
 
-                      // Susun data yang akan dikirim (termasuk Kategori)
+                      // Susun data yang akan dikirim (termasuk Modal)
                       final productData = {
                         'name': name,
                         'price': price,
+                        'modal': modal, // SIMPAN MODAL KE DATABASE
                         'stock': stock,
-                        'category': selectedCategory, // Simpan kategori ke database
+                        'category': selectedCategory, 
                         'image_url': finalImageUrl,
                       };
 
@@ -345,15 +360,13 @@ class _StockScreenState extends State<StockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Gunakan DefaultTabController untuk membuat TabBar
     return DefaultTabController(
-      length: 2, // Ada 2 Tab
+      length: 2, 
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Manajemen Stok"),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          // Tambahkan TabBar di bagian bawah AppBar
           bottom: const TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
@@ -364,11 +377,10 @@ class _StockScreenState extends State<StockScreen> {
             ],
           ),
         ),
-        // TabBarView untuk menampilkan isi yang berbeda di setiap tab
         body: TabBarView(
           children: [
-            _buildProductList('store_stand'), // Tab 1
-            _buildProductList('eden'),        // Tab 2
+            _buildProductList('store_stand'), 
+            _buildProductList('eden'),        
           ],
         ),
         floatingActionButton: FloatingActionButton(
