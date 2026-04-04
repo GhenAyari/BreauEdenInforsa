@@ -13,6 +13,8 @@ dependencies:
   fl_chart: ^0.68.0
   animations: ^2.0.11
   shared_preferences: ^2.2.2
+  flutter_dotenv: ^6.0.0
+  supabase_flutter: ^2.12.2
 
 dev_dependencies:
   flutter_test:
@@ -21,3 +23,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - .env
