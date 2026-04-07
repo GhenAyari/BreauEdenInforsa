@@ -25,7 +25,6 @@ class _PosScreenState extends State<PosScreen> {
   String? _currentSessionId;
   String _operatorName = "";
   String _standName = ""; 
-  double _modalAwal = 0;
 
   bool _isCartExpanded = false;
   List<Map<String, dynamic>> _cart = [];
@@ -49,7 +48,6 @@ class _PosScreenState extends State<PosScreen> {
           _currentSessionId = data[0]['id'];
           _operatorName = data[0]['operator_name'];
           _standName = data[0]['stand_name'] ?? 'Stand Reguler'; 
-          _modalAwal = data[0]['modal_awal'].toDouble();
         });
       }
     } catch (e) {
@@ -57,14 +55,14 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  Future<void> _openSession(String operator, double modal, String standName) async {
+  Future<void> _openSession(String operator, String standName) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
       final response = await _supabase.from('sessions').insert({
         'operator_name': operator,
-        'modal_awal': modal,
         'stand_name': standName, 
-        'status': 'open'
+        'status': 'open',
+        'modal_awal': 0  // <--- TAMBAHKAN BARIS INI (Kirim angka 0 otomatis)
       }).select('id').single();
 
       if (mounted) {
@@ -73,7 +71,6 @@ class _PosScreenState extends State<PosScreen> {
           _currentSessionId = response['id'];
           _operatorName = operator;
           _standName = standName;
-          _modalAwal = modal;
           _cart.clear();
           _isCartExpanded = false;
         });
@@ -111,11 +108,9 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // --- FITUR BARU: JEDA & LANJUTKAN SESI ---
   Future<void> _pauseSession() async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
-      // Ubah status jadi paused
       await _supabase.from('sessions').update({
         'status': 'paused',
       }).eq('id', _currentSessionId!);
@@ -124,7 +119,7 @@ class _PosScreenState extends State<PosScreen> {
         setState(() {
           _isSessionOpen = false;
           _currentSessionId = null;
-          _cart.clear(); // Kosongkan keranjang agar bersih saat dijeda
+          _cart.clear(); 
           _isCartExpanded = false;
         });
         Navigator.pop(context); 
@@ -140,7 +135,6 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _resumeSession(Map<String, dynamic> session) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
-      // Ubah status kembali ke open
       await _supabase.from('sessions').update({
         'status': 'open'
       }).eq('id', session['id']);
@@ -151,11 +145,10 @@ class _PosScreenState extends State<PosScreen> {
           _currentSessionId = session['id'];
           _operatorName = session['operator_name'];
           _standName = session['stand_name'] ?? 'Stand Reguler';
-          _modalAwal = session['modal_awal'].toDouble();
           _cart.clear();
           _isCartExpanded = false;
         });
-        Navigator.pop(context); // Tutup loading dialog
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sesi kembali dilanjutkan!"), backgroundColor: AppColors.success));
       }
     } catch (e) {
@@ -260,7 +253,6 @@ class _PosScreenState extends State<PosScreen> {
     rows.add(['Nama Stand', session['stand_name'] ?? 'Stand Reguler']);
     rows.add(['Tanggal', session['closed_at'].toString().split('T')[0]]);
     rows.add(['Penjaga Shift', session['operator_name']]);
-    rows.add(['Modal Awal (Tunai)', session['modal_awal']]);
     rows.add([]); 
 
     rows.add(['Nama Barang', 'Jumlah (Qty)', 'Harga Satuan', 'Modal Satuan', 'Total Harga', 'Metode Bayar', 'Link Bukti QRIS']);
@@ -304,7 +296,7 @@ class _PosScreenState extends State<PosScreen> {
     rows.add(['TOTAL MODAL BARANG (B)', grandTotalModal]);
     rows.add(['LABA BERSIH (A - B)', grandTotalPemasukan - grandTotalModal]);
     rows.add([]); 
-    rows.add(['TOTAL FISIK UANG DI KOTAK (Modal Awal + Tunai)', (session['modal_awal'] + totalTunai)]);
+    rows.add(['TOTAL FISIK UANG DI KOTAK (Hanya Tunai)', totalTunai]);
 
     String csvData = const ListToCsvConverter().convert(rows);
 
@@ -360,44 +352,88 @@ class _PosScreenState extends State<PosScreen> {
   void _showOpenSessionDialog() {
     final operatorController = TextEditingController();
     final standNameController = TextEditingController(); 
-    final modalController = TextEditingController();
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("Buka Stand Inforsa", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: standNameController, decoration: const InputDecoration(labelText: "Keterangan/Nama Stand", prefixIcon: Icon(Icons.storefront))),
-            const SizedBox(height: 10),
-            TextField(controller: operatorController, decoration: const InputDecoration(labelText: "Nama Penjaga Shift", prefixIcon: Icon(Icons.person))),
-            const SizedBox(height: 10),
-            TextField(
-              controller: modalController, 
-              keyboardType: const TextInputType.numberWithOptions(decimal: true), 
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
-              decoration: const InputDecoration(labelText: "Modal Awal (Tunai)", prefixIcon: Icon(Icons.payments)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-            onPressed: () {
-              if (operatorController.text.isEmpty || standNameController.text.isEmpty || modalController.text.isEmpty) {
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Semua kolom wajib diisi!"), backgroundColor: Colors.red));
-                 return;
-              }
-              double parsedModal = double.tryParse(modalController.text) ?? 0;
-              _openSession(operatorController.text, parsedModal, standNameController.text);
-            },
-            child: const Text("Mulai Jualan"),
-          )
-        ],
-      ),
+      builder: (context) {
+        // Variabel lokal untuk menyimpan pesan error
+        String? errorStandName;
+        String? errorOperator;
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Buka Stand Inforsa", style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: standNameController, 
+                    // Bebas huruf, angka (integer), atau desimal (float)
+                    decoration: InputDecoration(
+                      labelText: "Keterangan/Nama Stand", 
+                      prefixIcon: const Icon(Icons.storefront),
+                      errorText: errorStandName, // Muncul pesan error merah di sini
+                    ),
+                    onChanged: (value) {
+                      // Hilangkan error otomatis saat user mulai mengetik
+                      if (errorStandName != null) setStateDialog(() => errorStandName = null);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: operatorController, 
+                    // FILTER KHUSUS: Hanya izinkan huruf (A-Z, a-z) dan spasi. Angka ditolak!
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]'))],
+                    decoration: InputDecoration(
+                      labelText: "Nama Penjaga Shift", 
+                      prefixIcon: const Icon(Icons.person),
+                      errorText: errorOperator, // Muncul pesan error merah di sini
+                    ),
+                    onChanged: (value) {
+                      // Hilangkan error otomatis saat user mulai mengetik
+                      if (errorOperator != null) setStateDialog(() => errorOperator = null);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  onPressed: () {
+                    bool isValid = true;
+
+                    // Validasi: Cek apakah kosong
+                    setStateDialog(() {
+                      if (standNameController.text.trim().isEmpty) {
+                        errorStandName = "Keterangan stand wajib diisi!";
+                        isValid = false;
+                      } else {
+                        errorStandName = null;
+                      }
+
+                      if (operatorController.text.trim().isEmpty) {
+                        errorOperator = "Nama penjaga wajib diisi!";
+                        isValid = false;
+                      } else {
+                        errorOperator = null;
+                      }
+                    });
+
+                    // Jika semua aman, baru proses buka stand
+                    if (isValid) {
+                      _openSession(operatorController.text.trim(), standNameController.text.trim());
+                    }
+                  },
+                  child: const Text("Mulai Jualan"),
+                )
+              ],
+            );
+          }
+        );
+      },
     );
   }
 
@@ -419,7 +455,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // DIALOG BARU: Konfirmasi Jeda Sesi
   void _showPauseSessionDialog() {
     showDialog(
       context: context,
@@ -438,7 +473,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // BOTTOM SHEET BARU: Menampilkan daftar sesi yang sedang "paused"
   void _showPausedSessionsSheet() {
     showModalBottomSheet(
       context: context,
@@ -478,11 +512,11 @@ class _PosScreenState extends State<PosScreen> {
                           child: ListTile(
                             leading: const Icon(Icons.pause_circle_filled, color: Colors.orange, size: 40),
                             title: Text(session['stand_name'] ?? 'Stand Reguler', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("Penjaga: ${session['operator_name']}\nModal: Rp ${session['modal_awal']}"),
+                            subtitle: Text("Penjaga: ${session['operator_name']}"),
                             trailing: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                               onPressed: () {
-                                Navigator.pop(context); // Tutup sheet
+                                Navigator.pop(context); 
                                 _resumeSession(session);
                               },
                               icon: const Icon(Icons.play_arrow, size: 18),
@@ -569,15 +603,6 @@ class _PosScreenState extends State<PosScreen> {
                                     _buildItemsDetail(transactions),
                                     const SizedBox(height: 16),
                                     const Divider(),
-                                    
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text("Modal Awal (Tunai):", style: TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("Rp ${session['modal_awal']}", style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
                                     
                                     SizedBox(
                                       width: double.infinity,
@@ -905,7 +930,6 @@ class _PosScreenState extends State<PosScreen> {
               ),
               const SizedBox(height: 16),
 
-              // TOMBOL BARU: Lihat Sesi yang Terjeda
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange, width: 2), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
                 icon: const Icon(Icons.pause_circle_outline),
@@ -930,7 +954,6 @@ class _PosScreenState extends State<PosScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
-          // TOMBOL BARU: Jeda Sesi
           IconButton(
             icon: const Icon(Icons.pause_circle_outline, color: Colors.white),
             tooltip: 'Jeda Sesi (Istirahat)',

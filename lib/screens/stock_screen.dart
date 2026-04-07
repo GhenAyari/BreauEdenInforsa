@@ -1,8 +1,28 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // IMPORT BARU: Untuk format angka
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/colors.dart';
+
+// KELAS BARU: Formatter untuk mengubah angka menjadi format titik Rupiah otomatis
+class CurrencyFormat extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+    // Hapus semua karakter selain angka
+    final intValue = int.parse(newValue.text.replaceAll(RegExp(r'[^0-9]'), ''));
+    // Tambahkan titik setiap ribuan
+    final newText = intValue.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+    
+    return TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+}
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
@@ -14,10 +34,17 @@ class StockScreen extends StatefulWidget {
 class _StockScreenState extends State<StockScreen> {
   SupabaseClient get _supabase => Supabase.instance.client;
   
-  // Inisialisasi Image Picker
   final ImagePicker _picker = ImagePicker();
 
-  // FUNGSI: Helper untuk membuat List Barang berdasarkan Kategori
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Widget _buildProductList(String category) {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _supabase
@@ -38,30 +65,39 @@ class _StockScreenState extends State<StockScreen> {
 
         final products = snapshot.data!;
 
+        final filteredProducts = products.where((product) {
+          final productName = product['name'].toString().toLowerCase();
+          return productName.contains(_searchQuery.toLowerCase());
+        }).toList();
+
+        if (filteredProducts.isEmpty) {
+          return const Center(child: Text('Tidak ada barang yang cocok dengan pencarian.', style: TextStyle(color: Colors.grey)));
+        }
+
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: products.length,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: filteredProducts.length,
           itemBuilder: (_, index) {
-            final product = products[index];
+            final product = filteredProducts[index];
             
             return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               child: ListTile(
                 leading: CircleAvatar(
                   radius: 25,
                   backgroundColor: Colors.grey[200],
-                  backgroundImage: product['image_url'] != null
-                      ? NetworkImage(product['image_url'])
-                      : null,
-                  child: product['image_url'] == null 
-                      ? const Icon(Icons.inventory_2, color: Colors.grey)
-                      : null,
+                  backgroundImage: product['image_url'] != null ? NetworkImage(product['image_url']) : null,
+                  child: product['image_url'] == null ? const Icon(Icons.inventory_2, color: Colors.grey) : null,
                 ),
                 title: Text(
                   product['name'],
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                // TAMPILAN DIPERBARUI: Menampilkan Modal juga
-                subtitle: Text("Stok: ${product['stock']} | Harga: Rp ${product['price']} | Modal: Rp ${product['modal'] ?? 0}"),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text("Stok: ${product['stock']} | Harga: Rp ${product['price']} | Modal: Rp ${product['modal'] ?? 0}"),
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -83,27 +119,39 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
-  // Fungsi untuk menampilkan Pop-up Form
+  // Fungsi helper untuk memformat nilai awal saat mode EDIT agar tetap bertitik
+  String _formatInitialCurrency(dynamic value) {
+    if (value == null) return '';
+    int val = value is int ? value : (num.tryParse(value.toString())?.toInt() ?? 0);
+    return val.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+  }
+
   Future<void> _showFormDialog({Map<String, dynamic>? product}) async {
     final isEditing = product != null; 
     
     final nameController = TextEditingController(text: isEditing ? product['name'] : '');
-    final priceController = TextEditingController(text: isEditing ? product['price'].toString() : '');
-    // CONTROLLER BARU: Untuk Modal
-    final modalController = TextEditingController(text: isEditing ? (product['modal']?.toString() ?? '0') : '');
+    // Harga & Modal diformat saat pertama kali muncul jika sedang mode Edit
+    final priceController = TextEditingController(text: isEditing ? _formatInitialCurrency(product['price']) : '');
+    final modalController = TextEditingController(text: isEditing ? _formatInitialCurrency(product['modal']) : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
     
-    // Variabel untuk menyimpan kategori (Default: store_stand)
     String selectedCategory = isEditing ? (product['category'] ?? 'store_stand') : 'store_stand';
     
-    // Variabel untuk menyimpan gambar
     Uint8List? selectedImageBytes;
     String? currentImageUrl = isEditing ? product['image_url'] : null;
     String? imageExtension;
 
     await showDialog(
       context: context,
+      barrierDismissible: false, // Mencegah form tertutup saat klik luar area
       builder: (context) {
+        
+        // VARIABEL ERROR LOKAL
+        String? errorName;
+        String? errorPrice;
+        String? errorModal;
+        String? errorStock;
+
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             
@@ -120,13 +168,11 @@ class _StockScreenState extends State<StockScreen> {
             }
 
             return AlertDialog(
-              title: Text(isEditing ? 'Edit Barang' : 'Tambah Barang Baru', 
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(isEditing ? 'Edit Barang' : 'Tambah Barang Baru', style: const TextStyle(fontWeight: FontWeight.bold)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Area Foto
                     GestureDetector(
                       onTap: () {
                         showModalBottomSheet(
@@ -134,22 +180,8 @@ class _StockScreenState extends State<StockScreen> {
                           builder: (_) => SafeArea(
                             child: Wrap(
                               children: [
-                                ListTile(
-                                  leading: const Icon(Icons.photo_library),
-                                  title: const Text('Galeri'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    pickImage(ImageSource.gallery);
-                                  },
-                                ),
-                                ListTile(
-                                  leading: const Icon(Icons.camera_alt),
-                                  title: const Text('Kamera'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    pickImage(ImageSource.camera);
-                                  },
-                                ),
+                                ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () { Navigator.pop(context); pickImage(ImageSource.gallery); }),
+                                ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () { Navigator.pop(context); pickImage(ImageSource.camera); }),
                               ],
                             ),
                           ),
@@ -164,66 +196,59 @@ class _StockScreenState extends State<StockScreen> {
                           border: Border.all(color: Colors.grey[400]!),
                         ),
                         child: selectedImageBytes != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.memory(selectedImageBytes!, fit: BoxFit.cover),
-                              )
+                            ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(selectedImageBytes!, fit: BoxFit.cover))
                             : currentImageUrl != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(currentImageUrl!, fit: BoxFit.cover),
-                                  )
-                                : const Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                                      SizedBox(height: 8),
-                                      Text('Tambah Foto', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                    ],
-                                  ),
+                                ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(currentImageUrl!, fit: BoxFit.cover))
+                                : const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_a_photo, size: 40, color: Colors.grey), SizedBox(height: 8), Text('Tambah Foto', style: TextStyle(fontSize: 12, color: Colors.grey))]),
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    // Dropdown Kategori (Store/Stand vs Eden)
-                   DropdownButtonFormField<String>(
+                    DropdownButtonFormField<String>(
                       value: selectedCategory,
                       decoration: const InputDecoration(labelText: 'Lokasi Penyimpanan', prefixIcon: Icon(Icons.location_on_outlined)),
                       items: const [
                         DropdownMenuItem(value: 'store_stand', child: Text('Store & Stand')),
                         DropdownMenuItem(value: 'eden', child: Text('Eden (Gudang)')),
-                        DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan')), // <--- TAMBAH INI
+                        DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan')), 
                       ],
-                      onChanged: (val) {
-                        setStateDialog(() { selectedCategory = val!; });
-                      },
+                      onChanged: (val) { setStateDialog(() { selectedCategory = val!; }); },
                     ),
                     const SizedBox(height: 10),
 
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Nama Barang', prefixIcon: Icon(Icons.inventory_2_outlined)),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: priceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Harga Jual (Rp)', prefixIcon: Icon(Icons.sell_outlined)),
+                      decoration: InputDecoration(labelText: 'Nama Barang', prefixIcon: const Icon(Icons.inventory_2_outlined), errorText: errorName),
+                      onChanged: (_) { if (errorName != null) setStateDialog(() => errorName = null); },
                     ),
                     const SizedBox(height: 10),
                     
-                    // INPUT BARU: Kolom Modal
+                    TextField(
+                      controller: priceController,
+                      keyboardType: TextInputType.number,
+                      // FILTER: Hanya angka & Format Titik Otomatis
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyFormat()],
+                      decoration: InputDecoration(labelText: 'Harga Jual (Rp)', prefixIcon: const Icon(Icons.sell_outlined), errorText: errorPrice),
+                      onChanged: (_) { if (errorPrice != null) setStateDialog(() => errorPrice = null); },
+                    ),
+                    const SizedBox(height: 10),
+                    
                     TextField(
                       controller: modalController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Modal Satuan (Rp)', prefixIcon: Icon(Icons.savings_outlined)),
+                      // FILTER: Hanya angka & Format Titik Otomatis
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyFormat()],
+                      decoration: InputDecoration(labelText: 'Modal Satuan (Rp)', prefixIcon: const Icon(Icons.savings_outlined), errorText: errorModal),
+                      onChanged: (_) { if (errorModal != null) setStateDialog(() => errorModal = null); },
                     ),
                     const SizedBox(height: 10),
 
                     TextField(
                       controller: stockController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Jumlah Stok', prefixIcon: Icon(Icons.numbers)),
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Hanya angka
+                      decoration: InputDecoration(labelText: 'Jumlah Stok', prefixIcon: const Icon(Icons.numbers), errorText: errorStock),
+                      onChanged: (_) { if (errorStock != null) setStateDialog(() => errorStock = null); },
                     ),
                   ],
                 ),
@@ -234,18 +259,20 @@ class _StockScreenState extends State<StockScreen> {
                   child: const Text('Batal', style: TextStyle(color: AppColors.textLight)),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                   onPressed: () async {
-                    // Validasi bertambah: Modal wajib diisi
-                    if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty || modalController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Nama, Harga, Modal, dan Stok wajib diisi!'), backgroundColor: Colors.red),
-                      );
-                      return;
-                    }
+                    bool isValid = true;
+
+                    // Logika Validasi Lokal
+                    setStateDialog(() {
+                      if (nameController.text.trim().isEmpty) { errorName = "Nama tidak boleh kosong!"; isValid = false; }
+                      if (priceController.text.trim().isEmpty) { errorPrice = "Harga wajib diisi!"; isValid = false; }
+                      if (modalController.text.trim().isEmpty) { errorModal = "Modal wajib diisi!"; isValid = false; }
+                      if (stockController.text.trim().isEmpty) { errorStock = "Stok wajib diisi!"; isValid = false; }
+                    });
+
+                    // Hentikan proses jika ada error
+                    if (!isValid) return;
 
                     showDialog(
                       context: context, 
@@ -253,10 +280,11 @@ class _StockScreenState extends State<StockScreen> {
                       builder: (context) => const Center(child: CircularProgressIndicator()),
                     );
 
-                    final name = nameController.text;
-                    final price = num.tryParse(priceController.text) ?? 0;
-                    final modal = num.tryParse(modalController.text) ?? 0; // TANGKAP INPUT MODAL
-                    final stock = int.tryParse(stockController.text) ?? 0;
+                    final name = nameController.text.trim();
+                    // Hilangkan titik-titik format Rupiah sebelum dikirim ke Database Supabase
+                    final price = num.tryParse(priceController.text.replaceAll('.', '')) ?? 0;
+                    final modal = num.tryParse(modalController.text.replaceAll('.', '')) ?? 0; 
+                    final stock = int.tryParse(stockController.text.replaceAll('.', '')) ?? 0;
                     
                     String? finalImageUrl = isEditing ? product['image_url'] : null;
 
@@ -273,11 +301,10 @@ class _StockScreenState extends State<StockScreen> {
                         finalImageUrl = _supabase.storage.from('product_image').getPublicUrl(fileName);
                       }
 
-                      // Susun data yang akan dikirim (termasuk Modal)
                       final productData = {
                         'name': name,
                         'price': price,
-                        'modal': modal, // SIMPAN MODAL KE DATABASE
+                        'modal': modal, 
                         'stock': stock,
                         'category': selectedCategory, 
                         'image_url': finalImageUrl,
@@ -374,11 +401,59 @@ class _StockScreenState extends State<StockScreen> {
             ],
           ),
         ),
-        body: TabBarView(
+        body: Column(
           children: [
-            _buildProductList('store_stand'), 
-            _buildProductList('eden'),    
-            _buildProductList('penyewaan'),    
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value; 
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: "Cari nama barang...",
+                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = ''; 
+                            });
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+            ),
+            
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildProductList('store_stand'), 
+                  _buildProductList('eden'),    
+                  _buildProductList('penyewaan'),    
+                ],
+              ),
+            ),
           ],
         ),
         floatingActionButton: FloatingActionButton(
