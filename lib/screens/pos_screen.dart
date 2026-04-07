@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image_picker/image_picker.dart'; // IMPORT BARU
+import 'package:image_picker/image_picker.dart'; 
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:csv/csv.dart';
 import '../core/colors.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -16,7 +18,7 @@ class PosScreen extends StatefulWidget {
 
 class _PosScreenState extends State<PosScreen> {
   final _supabase = Supabase.instance.client;
-  final ImagePicker _picker = ImagePicker(); // INISIALISASI PICKER
+  final ImagePicker _picker = ImagePicker(); 
 
   // --- STATE SESI & KERANJANG ---
   bool _isSessionOpen = false;
@@ -27,11 +29,13 @@ class _PosScreenState extends State<PosScreen> {
 
   bool _isCartExpanded = false;
   List<Map<String, dynamic>> _cart = [];
+  late final Stream<List<Map<String, dynamic>>> _productsStream;
 
   @override
   void initState() {
     super.initState();
     _checkActiveSession();
+    _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'store_stand').order('name');
   }
 
   // --- FUNGSI DATABASE (SUPABASE) ---
@@ -107,6 +111,59 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
+  // --- FITUR BARU: JEDA & LANJUTKAN SESI ---
+  Future<void> _pauseSession() async {
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    try {
+      // Ubah status jadi paused
+      await _supabase.from('sessions').update({
+        'status': 'paused',
+      }).eq('id', _currentSessionId!);
+
+      if (mounted) {
+        setState(() {
+          _isSessionOpen = false;
+          _currentSessionId = null;
+          _cart.clear(); // Kosongkan keranjang agar bersih saat dijeda
+          _isCartExpanded = false;
+        });
+        Navigator.pop(context); 
+        Navigator.pop(context); 
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sesi berhasil dijeda!"), backgroundColor: Colors.orange));
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal menjeda sesi: $e"), backgroundColor: Colors.red));
+    }
+  }
+
+  Future<void> _resumeSession(Map<String, dynamic> session) async {
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    try {
+      // Ubah status kembali ke open
+      await _supabase.from('sessions').update({
+        'status': 'open'
+      }).eq('id', session['id']);
+
+      if (mounted) {
+        setState(() {
+          _isSessionOpen = true;
+          _currentSessionId = session['id'];
+          _operatorName = session['operator_name'];
+          _standName = session['stand_name'] ?? 'Stand Reguler';
+          _modalAwal = session['modal_awal'].toDouble();
+          _cart.clear();
+          _isCartExpanded = false;
+        });
+        Navigator.pop(context); // Tutup loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sesi kembali dilanjutkan!"), backgroundColor: AppColors.success));
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal melanjutkan sesi: $e"), backgroundColor: Colors.red));
+    }
+  }
+
   Future<void> _deleteSession(String sessionId) async {
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -144,14 +201,12 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // FUNGSI DIPERBARUI: Menerima file foto bukti (jika ada)
   Future<void> _prosesBayarKeDatabase(String metodePembayaran, {Uint8List? proofBytes, String? fileExt}) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
     try {
       String? proofUrl;
 
-      // Jika ada file bukti (QRIS), upload dulu ke Storage
       if (proofBytes != null && fileExt != null) {
         final fileName = 'qris_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
         await _supabase.storage.from('qris_proof').uploadBinary(fileName, proofBytes);
@@ -162,7 +217,7 @@ class _PosScreenState extends State<PosScreen> {
         'session_id': _currentSessionId,
         'payment_method': metodePembayaran,
         'total_amount': _cartTotal,
-        'proof_url': proofUrl, // Simpan URL ke database
+        'proof_url': proofUrl, 
       }).select('id').single();
 
       final transactionId = trxResponse['id'];
@@ -174,7 +229,7 @@ class _PosScreenState extends State<PosScreen> {
           'product_name': item['name'],
           'qty': item['qty'],
           'price': item['price'],
-          'modal': item['modal'] ?? 0, // TITIK BEDAH 1: Simpan modal saat bayar
+          'modal': item['modal'] ?? 0, 
           'total_price': item['qty'] * item['price'],
         });
 
@@ -198,7 +253,6 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // --- FUNGSI EKSPOR CSV (TITIK BEDAH 2) ---
   Future<void> _exportToCSV(Map<String, dynamic> session) async {
     List<List<dynamic>> rows = [];
 
@@ -209,7 +263,6 @@ class _PosScreenState extends State<PosScreen> {
     rows.add(['Modal Awal (Tunai)', session['modal_awal']]);
     rows.add([]); 
 
-    // Header Tabel ditambah Kolom Modal
     rows.add(['Nama Barang', 'Jumlah (Qty)', 'Harga Satuan', 'Modal Satuan', 'Total Harga', 'Metode Bayar', 'Link Bukti QRIS']);
 
     final transactions = session['transactions'] as List;
@@ -227,14 +280,14 @@ class _PosScreenState extends State<PosScreen> {
       grandTotalPemasukan += t['total_amount'];
 
       for (var item in t['transaction_items']) {
-        double modalItem = (item['modal'] ?? 0).toDouble(); // Ambil nilai modal dari database
-        grandTotalModal += (modalItem * item['qty']); // Hitung total modal terpakai
+        double modalItem = (item['modal'] ?? 0).toDouble(); 
+        grandTotalModal += (modalItem * item['qty']); 
 
         rows.add([
           item['product_name'],
           item['qty'],
           item['price'],
-          modalItem, // Masukkan Modal Satuan ke baris CSV
+          modalItem, 
           item['total_price'],
           t['payment_method'],
           t['proof_url'] ?? '-', 
@@ -255,17 +308,16 @@ class _PosScreenState extends State<PosScreen> {
 
     String csvData = const ListToCsvConverter().convert(rows);
 
-    final bytes = utf8.encode(csvData);
-    final blob = html.Blob([bytes]);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    
-    final fileName = "Laporan_${session['stand_name']}_${session['closed_at'].toString().split('T')[0]}.csv";
-    
-    html.AnchorElement(href: url)
-      ..setAttribute("download", fileName)
-      ..click(); 
+    try {
+      final directory = await getTemporaryDirectory();
+      final path = "${directory.path}/Laporan_${session['stand_name']}.csv";
+      final file = File(path);
+      await file.writeAsString(csvData);
       
-    html.Url.revokeObjectUrl(url); 
+      await Share.shareXFiles([XFile(path)], text: 'Laporan POS Stand: ${session['stand_name']}');
+    } catch (e) {
+      print("Gagal export: $e");
+    }
   }
 
   // --- FUNGSI LOGIKA KERANJANG ---
@@ -367,6 +419,89 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
+  // DIALOG BARU: Konfirmasi Jeda Sesi
+  void _showPauseSessionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Jeda Sesi?", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Sesi akan diistirahatkan sementara dan transaksi yang belum dibayar di keranjang akan dikosongkan. Anda dapat melanjutkannya nanti di menu awal."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            onPressed: _pauseSession, 
+            child: const Text("Jeda Sesi"),
+          )
+        ],
+      ),
+    );
+  }
+
+  // BOTTOM SHEET BARU: Menampilkan daftar sesi yang sedang "paused"
+  void _showPausedSessionsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Sesi yang Terjeda", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _supabase.from('sessions').select().eq('status', 'paused').order('created_at', ascending: false),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Tidak ada sesi yang sedang dijeda."));
+
+                    final sessions = snapshot.data!;
+
+                    return ListView.builder(
+                      itemCount: sessions.length,
+                      itemBuilder: (context, index) {
+                        final session = sessions[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(side: BorderSide(color: Colors.orange.withOpacity(0.5)), borderRadius: BorderRadius.circular(10)),
+                          child: ListTile(
+                            leading: const Icon(Icons.pause_circle_filled, color: Colors.orange, size: 40),
+                            title: Text(session['stand_name'] ?? 'Stand Reguler', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text("Penjaga: ${session['operator_name']}\nModal: Rp ${session['modal_awal']}"),
+                            trailing: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                              onPressed: () {
+                                Navigator.pop(context); // Tutup sheet
+                                _resumeSession(session);
+                              },
+                              icon: const Icon(Icons.play_arrow, size: 18),
+                              label: const Text("Lanjutkan"),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showHistorySheet() {
     showModalBottomSheet(
       context: context,
@@ -389,7 +524,6 @@ class _PosScreenState extends State<PosScreen> {
               const Divider(),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  // TITIK BEDAH 3: Tambahkan kata "modal" di query ini
                   future: _supabase.from('sessions').select('''
                     *,
                     transactions (
@@ -539,7 +673,7 @@ class _PosScreenState extends State<PosScreen> {
                     label: const Text("QRIS"),
                     onPressed: () {
                       Navigator.pop(context); 
-                      _showQrisPaymentDialog(); // Panggil fungsi QRIS yang baru
+                      _showQrisPaymentDialog(); 
                     },
                   ),
                 ),
@@ -563,7 +697,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // FUNGSI BARU: Dialog Pembayaran QRIS + Upload Bukti
   void _showQrisPaymentDialog() {
     Uint8List? selectedImageBytes;
     String? imageExtension;
@@ -575,15 +708,20 @@ class _PosScreenState extends State<PosScreen> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             
-            // Fungsi pilih gambar dari Kamera/Galeri
             Future<void> pickImage(ImageSource source) async {
-              final XFile? image = await _picker.pickImage(source: source);
-              if (image != null) {
-                final bytes = await image.readAsBytes();
-                setStateDialog(() {
-                  selectedImageBytes = bytes;
-                  imageExtension = image.name.split('.').last;
-                });
+              try {
+                final ImagePicker localPicker = ImagePicker(); 
+                final XFile? image = await localPicker.pickImage(source: source);
+                
+                if (image != null) {
+                  final bytes = await image.readAsBytes();
+                  setStateDialog(() {
+                    selectedImageBytes = bytes;
+                    imageExtension = image.name.contains('.') ? image.name.split('.').last : 'png';
+                  });
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal membuka Kamera/Galeri: $e"), backgroundColor: Colors.red));
               }
             }
 
@@ -595,10 +733,6 @@ class _PosScreenState extends State<PosScreen> {
                   children: [
                     Text("Total Tagihan: Rp $_cartTotal", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
                     const SizedBox(height: 15),
-                    
-                    // Menampilkan Gambar QRIS
-                    // Pastikan gambar qris.jpg ada di folder assets dan terdaftar di pubspec.yaml
-                    // Jika belum ada, ini akan menampilkan icon error sementara
                     Container(
                       width: 200,
                       height: 200,
@@ -620,7 +754,6 @@ class _PosScreenState extends State<PosScreen> {
                     const Text("Upload Bukti Transfer:", style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
 
-                    // Tampilan Gambar Bukti yang dipilih
                     if (selectedImageBytes != null) ...[
                       Container(
                         height: 150,
@@ -630,7 +763,6 @@ class _PosScreenState extends State<PosScreen> {
                       const SizedBox(height: 10),
                     ],
 
-                    // Tombol Kamera & Galeri
                     Row(
                       children: [
                         Expanded(
@@ -657,7 +789,6 @@ class _PosScreenState extends State<PosScreen> {
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, disabledBackgroundColor: Colors.grey[300]),
-                  // Tombol mati jika belum ada foto bukti
                   onPressed: selectedImageBytes != null ? () {
                     Navigator.pop(context); 
                     _prosesBayarKeDatabase("QRIS", proofBytes: selectedImageBytes, fileExt: imageExtension);
@@ -757,6 +888,7 @@ class _PosScreenState extends State<PosScreen> {
               const SizedBox(height: 16),
               const Text("Stand saat ini sedang ditutup.", style: TextStyle(fontSize: 18, color: Colors.grey)),
               const SizedBox(height: 30),
+              
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
                 icon: const Icon(Icons.play_arrow),
@@ -764,11 +896,21 @@ class _PosScreenState extends State<PosScreen> {
                 onPressed: _showOpenSessionDialog,
               ),
               const SizedBox(height: 16),
+              
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: const BorderSide(color: AppColors.primary, width: 2), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
                 icon: const Icon(Icons.history),
                 label: const Text("Lihat Riwayat Stand", style: TextStyle(fontSize: 16)),
                 onPressed: _showHistorySheet,
+              ),
+              const SizedBox(height: 16),
+
+              // TOMBOL BARU: Lihat Sesi yang Terjeda
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange, width: 2), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                icon: const Icon(Icons.pause_circle_outline),
+                label: const Text("Sesi yang Terjeda", style: TextStyle(fontSize: 16)),
+                onPressed: _showPausedSessionsSheet,
               )
             ],
           ),
@@ -781,16 +923,22 @@ class _PosScreenState extends State<PosScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_standName.isNotEmpty ? _standName : "Transaksi Penjualan"),
+            Text(_standName.isNotEmpty ? _standName : "Transaksi Penjualan", style: const TextStyle(fontSize: 18)),
             Text("Penjaga: $_operatorName", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
           ],
         ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          // TOMBOL BARU: Jeda Sesi
+          IconButton(
+            icon: const Icon(Icons.pause_circle_outline, color: Colors.white),
+            tooltip: 'Jeda Sesi (Istirahat)',
+            onPressed: _showPauseSessionDialog,
+          ),
           TextButton.icon(
             icon: const Icon(Icons.stop_circle_outlined, color: Colors.white),
-            label: const Text("Tutup Sesi", style: TextStyle(color: Colors.white)),
+            label: const Text("Tutup", style: TextStyle(color: Colors.white)),
             onPressed: _showCloseSessionDialog,
           )
         ],
@@ -798,7 +946,7 @@ class _PosScreenState extends State<PosScreen> {
       body: Stack(
         children: [
           StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'store_stand').order('name'),
+            stream: _productsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
               if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada barang jualan."));

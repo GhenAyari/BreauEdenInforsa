@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 import 'dart:convert'; // IMPORT BARU UNTUK CSV
-import 'dart:html' as html; // IMPORT BARU UNTUK DOWNLOAD WEB
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:csv/csv.dart'; // IMPORT BARU UNTUK CSV
 import '../core/colors.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class RentalScreen extends StatefulWidget {
   const RentalScreen({super.key});
@@ -291,13 +293,22 @@ class _RentalScreenState extends State<RentalScreen> {
     rows.add(['GRAND TOTAL PENDAPATAN SEWA', grandTotal]);
 
     String csvData = const ListToCsvConverter().convert(rows);
-    final bytes = utf8.encode(csvData);
-    final blob = html.Blob([bytes]);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final fileName = "Laporan_Penyewaan_${DateTime.now().millisecondsSinceEpoch}.csv";
-    html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
-    html.Url.revokeObjectUrl(url);
-  }
+
+    // --- BAGIAN BARU: SISTEM SHARE ANDROID ---
+    try {
+      final directory = await getTemporaryDirectory();
+      final path = "${directory.path}/Laporan_Penyewaan_${DateTime.now().millisecondsSinceEpoch}.csv";
+      final file = File(path);
+      await file.writeAsString(csvData);
+
+      // Memunculkan menu Share di HP
+      await Share.shareXFiles([XFile(path)], text: 'Berikut adalah Laporan Penyewaan terbaru.');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal mengekspor data: $e"), backgroundColor: Colors.red));
+      }
+    }
+  } // <-- Ini tutup kurung fungsi _exportRentalsToCSV
 
   Future<void> _deleteRentalHistory(dynamic id) async {
     bool? confirm = await showDialog<bool>(
