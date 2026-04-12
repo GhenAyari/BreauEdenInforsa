@@ -1,13 +1,15 @@
 import 'dart:typed_data';
-import 'dart:convert'; // IMPORT BARU UNTUK CSV
+import 'dart:convert'; 
+import 'dart:io'; 
+import 'dart:async'; // IMPORT BARU: Untuk Fitur Timer Hitung Mundur
+import 'package:path_provider/path_provider.dart'; 
+import 'package:share_plus/share_plus.dart'; 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:csv/csv.dart'; // IMPORT BARU UNTUK CSV
+import 'package:csv/csv.dart'; 
 import '../core/colors.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 class RentalScreen extends StatefulWidget {
   const RentalScreen({super.key});
@@ -19,6 +21,25 @@ class RentalScreen extends StatefulWidget {
 class _RentalScreenState extends State<RentalScreen> {
   final _supabase = Supabase.instance.client;
 
+  // --- STATE STREAMS ---
+  late Stream<List<Map<String, dynamic>>> _katalogStream;
+  late Stream<List<Map<String, dynamic>>> _sedangDisewaStream;
+  late Stream<List<Map<String, dynamic>>> _telahSelesaiStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshData(); 
+  }
+
+  void _refreshData() {
+    setState(() {
+      _katalogStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'penyewaan').order('name');
+      _sedangDisewaStream = _supabase.from('rentals').stream(primaryKey: ['id']).eq('status', 'Dipinjam').order('created_at', ascending: false);
+      _telahSelesaiStream = _supabase.from('rentals').stream(primaryKey: ['id']).eq('status', 'Dikembalikan').order('created_at', ascending: false);
+    });
+  }
+
   // ==========================================
   // FUNGSI 1: FORM SEWA & UPLOAD BUKTI SERAH
   // ==========================================
@@ -27,8 +48,10 @@ class _RentalScreenState extends State<RentalScreen> {
     final nikController = TextEditingController();
     final alamatController = TextEditingController();
     final qtyController = TextEditingController(text: '1');
+    
     String durasiPilihan = '24 Jam';
-    final listDurasi = ['12 Jam', '24 Jam', '2 Hari', '3 Hari', '1 Minggu'];
+    // FITUR BARU: Tambah opsi 1 Menit untuk Testing
+    final listDurasi = ['1 Menit', '12 Jam', '24 Jam', '2 Hari', '3 Hari', '1 Minggu'];
 
     Uint8List? selectedImageBytes;
     String? imageExtension;
@@ -40,6 +63,12 @@ class _RentalScreenState extends State<RentalScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        
+        String? errorNama;
+        String? errorNik;
+        String? errorAlamat;
+        String? errorQty;
+
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             Future<void> pickImage(ImageSource source) async {
@@ -70,22 +99,59 @@ class _RentalScreenState extends State<RentalScreen> {
                     const SizedBox(height: 5),
                     Text("Tanggal Sewa: $tanggalHariIni", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 15),
-                    TextField(controller: namaController, decoration: InputDecoration(labelText: "Nama Penyewa", prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                    
+                    TextField(
+                      controller: namaController, 
+                      decoration: InputDecoration(labelText: "Nama Penyewa", prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), errorText: errorNama),
+                      onChanged: (_) { if (errorNama != null) setStateDialog(() => errorNama = null); }
+                    ),
                     const SizedBox(height: 10),
-                    TextField(controller: nikController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: "NIK (Sesuai KTP)", prefixIcon: const Icon(Icons.badge), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                    
+                    TextField(
+                      controller: nikController, 
+                      keyboardType: TextInputType.number, 
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                      decoration: InputDecoration(labelText: "NIK (Sesuai KTP)", prefixIcon: const Icon(Icons.badge), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), errorText: errorNik),
+                      onChanged: (_) { if (errorNik != null) setStateDialog(() => errorNik = null); }
+                    ),
                     const SizedBox(height: 10),
-                    TextField(controller: alamatController, decoration: InputDecoration(labelText: "Alamat Lengkap", prefixIcon: const Icon(Icons.home), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                    
+                    TextField(
+                      controller: alamatController, 
+                      decoration: InputDecoration(labelText: "Alamat Lengkap", prefixIcon: const Icon(Icons.home), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), errorText: errorAlamat),
+                      onChanged: (_) { if (errorAlamat != null) setStateDialog(() => errorAlamat = null); }
+                    ),
                     const SizedBox(height: 10),
+                    
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start, 
                       children: [
-                        Expanded(flex: 2, child: TextField(controller: qtyController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: "Jumlah", prefixIcon: const Icon(Icons.shopping_cart), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))))),
+                        Expanded(
+                          flex: 2, 
+                          child: TextField(
+                            controller: qtyController, 
+                            keyboardType: TextInputType.number, 
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                            decoration: InputDecoration(labelText: "Jumlah", prefixIcon: const Icon(Icons.shopping_cart), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), errorText: errorQty),
+                            onChanged: (_) { if (errorQty != null) setStateDialog(() => errorQty = null); }
+                          )
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(flex: 3, child: DropdownButtonFormField<String>(value: durasiPilihan, decoration: InputDecoration(labelText: "Durasi Sewa", border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))), items: listDurasi.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(), onChanged: (val) => setStateDialog(() => durasiPilihan = val!))),
+                        Expanded(
+                          flex: 3, 
+                          child: DropdownButtonFormField<String>(
+                            value: durasiPilihan, 
+                            decoration: InputDecoration(labelText: "Durasi Sewa", border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))), 
+                            items: listDurasi.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(), 
+                            onChanged: (val) => setStateDialog(() => durasiPilihan = val!)
+                          )
+                        ),
                       ],
                     ),
                     const Divider(height: 30),
                     const Text("Foto Bukti Penyerahan:", style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
+                    
                     if (selectedImageBytes != null) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12), 
@@ -108,18 +174,35 @@ class _RentalScreenState extends State<RentalScreen> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   onPressed: () {
-                    if (namaController.text.isEmpty || nikController.text.isEmpty || alamatController.text.isEmpty || qtyController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Semua data wajib diisi!"), backgroundColor: Colors.red)); return;
-                    }
+                    bool isValid = true;
+                    int qtySewa = 0;
+
+                    setStateDialog(() {
+                      if (namaController.text.trim().isEmpty) { errorNama = "Wajib diisi!"; isValid = false; }
+                      if (nikController.text.trim().isEmpty) { errorNik = "Wajib diisi!"; isValid = false; }
+                      if (alamatController.text.trim().isEmpty) { errorAlamat = "Wajib diisi!"; isValid = false; }
+                      
+                      if (qtyController.text.trim().isEmpty) { 
+                        errorQty = "Wajib diisi!"; isValid = false; 
+                      } else {
+                        qtySewa = int.tryParse(qtyController.text.trim()) ?? 0;
+                        if (qtySewa <= 0) {
+                          errorQty = "Minimal 1!"; isValid = false;
+                        } else if (qtySewa > product['stock']) {
+                          errorQty = "Melebihi stok!"; isValid = false;
+                        }
+                      }
+                    });
+
+                    if (!isValid) return;
+
                     if (selectedImageBytes == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Wajib melampirkan foto bukti penyerahan!"), backgroundColor: Colors.red)); return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Wajib melampirkan foto bukti penyerahan!"), backgroundColor: Colors.red)); 
+                      return;
                     }
-                    int qtySewa = int.tryParse(qtyController.text) ?? 0;
-                    if (qtySewa <= 0 || qtySewa > product['stock']) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Jumlah tidak valid atau melebihi stok!"), backgroundColor: Colors.red)); return;
-                    }
+                    
                     Navigator.pop(context); 
-                    _prosesSewa(product, namaController.text, nikController.text, alamatController.text, qtySewa, durasiPilihan, selectedImageBytes, imageExtension);
+                    _prosesSewa(product, namaController.text.trim(), nikController.text.trim(), alamatController.text.trim(), qtySewa, durasiPilihan, selectedImageBytes, imageExtension);
                   },
                   child: const Text("Simpan & Sewakan"),
                 )
@@ -154,8 +237,10 @@ class _RentalScreenState extends State<RentalScreen> {
       });
       final newStock = product['stock'] - qty;
       await _supabase.from('products').update({'stock': newStock}).eq('id', product['id']);
+      
       if (mounted) {
         Navigator.pop(context); 
+        _refreshData(); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Barang berhasil disewakan!"), backgroundColor: Colors.green));
       }
     } catch (e) {
@@ -256,6 +341,7 @@ class _RentalScreenState extends State<RentalScreen> {
       }
       if (mounted) {
         Navigator.pop(context);
+        _refreshData(); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Barang telah dikembalikan!"), backgroundColor: Colors.green));
       }
     } catch (e) {
@@ -264,7 +350,7 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   // ==========================================
-  // FUNGSI BARU 3: EKSPOR CSV & HAPUS RIWAYAT
+  // FUNGSI 3: EKSPOR CSV & HAPUS RIWAYAT
   // ==========================================
   Future<void> _exportRentalsToCSV(List<Map<String, dynamic>> rentals) async {
     List<List<dynamic>> rows = [];
@@ -294,21 +380,19 @@ class _RentalScreenState extends State<RentalScreen> {
 
     String csvData = const ListToCsvConverter().convert(rows);
 
-    // --- BAGIAN BARU: SISTEM SHARE ANDROID ---
     try {
       final directory = await getTemporaryDirectory();
       final path = "${directory.path}/Laporan_Penyewaan_${DateTime.now().millisecondsSinceEpoch}.csv";
       final file = File(path);
       await file.writeAsString(csvData);
 
-      // Memunculkan menu Share di HP
       await Share.shareXFiles([XFile(path)], text: 'Berikut adalah Laporan Penyewaan terbaru.');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal mengekspor data: $e"), backgroundColor: Colors.red));
       }
     }
-  } // <-- Ini tutup kurung fungsi _exportRentalsToCSV
+  }
 
   Future<void> _deleteRentalHistory(dynamic id) async {
     bool? confirm = await showDialog<bool>(
@@ -329,6 +413,7 @@ class _RentalScreenState extends State<RentalScreen> {
         await _supabase.from('rentals').delete().eq('id', id);
         if (mounted) {
           Navigator.pop(context);
+          _refreshData(); 
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Riwayat berhasil dihapus"), backgroundColor: Colors.red));
         }
       } catch (e) {
@@ -369,7 +454,7 @@ class _RentalScreenState extends State<RentalScreen> {
             
             // TAB 1: KATALOG BARANG
             StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'penyewaan').order('name'),
+              stream: _katalogStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada barang penyewaan."));
@@ -397,66 +482,33 @@ class _RentalScreenState extends State<RentalScreen> {
               }
             ),
 
-            // TAB 2: DAFTAR SEDANG DISEWA
+            // TAB 2: DAFTAR SEDANG DISEWA DENGAN TIMER LOKAL
             StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase.from('rentals').stream(primaryKey: ['id']).eq('status', 'Dipinjam').order('created_at', ascending: false),
+              stream: _sedangDisewaStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada barang yang sedang disewa."));
+                
                 final rentals = snapshot.data!;
+                
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16), itemCount: rentals.length,
+                  padding: const EdgeInsets.all(16), 
+                  itemCount: rentals.length,
                   itemBuilder: (context, index) {
                     final rental = rentals[index];
-                    final String tanggalSewa = rental['created_at'].toString().split('T')[0];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 3,
-                      child: ExpansionTile(
-                        leading: const Icon(Icons.person_pin, color: Colors.orange, size: 36),
-                        title: Text(rental['renter_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("${rental['product_name']} (${rental['qty']} pcs)\nTgl Sewa: $tanggalSewa | Durasi: ${rental['duration']}"),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text("Detail Identitas Penyewa:", style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 5),
-                                Text("NIK KTP: ${rental['renter_nik']}"),
-                                Text("Alamat: ${rental['renter_address']}"),
-                                const Divider(),
-                                if (rental['rent_proof_url'] != null) ...[
-                                  const Text("Bukti Penyerahan Awal:", style: TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 5),
-                                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(rental['rent_proof_url'], height: 150, width: double.infinity, fit: BoxFit.cover)),
-                                  const SizedBox(height: 10),
-                                ],
-                                Text("Total Tagihan: Rp ${rental['total_price']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
-                                const SizedBox(height: 15),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.all(12)),
-                                    onPressed: () => _showReturnDialog(rental),
-                                    icon: const Icon(Icons.assignment_return),
-                                    label: const Text("Tandai Dikembalikan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                  ),
-                                )
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
+                    // MEMANGGIL WIDGET TIMER KHUSUS
+                    return ActiveRentalCard(
+                      rental: rental,
+                      onReturn: () => _showReturnDialog(rental),
                     );
                   }
                 );
               }
             ),
 
-            // TAB 3: TELAH SELESAI (DENGAN FITUR DOWNLOAD & HAPUS)
+            // TAB 3: TELAH SELESAI
             StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase.from('rentals').stream(primaryKey: ['id']).eq('status', 'Dikembalikan').order('created_at', ascending: false),
+              stream: _telahSelesaiStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada riwayat penyewaan selesai."));
@@ -465,7 +517,6 @@ class _RentalScreenState extends State<RentalScreen> {
                 
                 return Column(
                   children: [
-                    // TOMBOL EXPORT CSV DI BAGIAN ATAS
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: SizedBox(
@@ -530,7 +581,6 @@ class _RentalScreenState extends State<RentalScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 20),
-                                      // TOMBOL HAPUS RIWAYAT
                                       SizedBox(
                                         width: double.infinity,
                                         child: OutlinedButton.icon(
@@ -556,6 +606,166 @@ class _RentalScreenState extends State<RentalScreen> {
 
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// KELAS BARU: KARTU TIMER HITUNG MUNDUR
+// ==========================================
+class ActiveRentalCard extends StatefulWidget {
+  final Map<String, dynamic> rental;
+  final VoidCallback onReturn;
+
+  const ActiveRentalCard({Key? key, required this.rental, required this.onReturn}) : super(key: key);
+
+  @override
+  State<ActiveRentalCard> createState() => _ActiveRentalCardState();
+}
+
+class _ActiveRentalCardState extends State<ActiveRentalCard> {
+  Timer? _timer;
+  Duration _remainingTime = Duration.zero;
+  bool _isOverdue = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateTime();
+    // Memperbarui waktu setiap 1 detik
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _calculateTime();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // Menerjemahkan tulisan durasi dari database menjadi hitungan nyata
+  Duration _parseDurationString(String durationStr) {
+    if (durationStr == '1 Menit') return const Duration(minutes: 1);
+    if (durationStr == '12 Jam') return const Duration(hours: 12);
+    if (durationStr == '24 Jam') return const Duration(hours: 24);
+    if (durationStr == '2 Hari') return const Duration(days: 2);
+    if (durationStr == '3 Hari') return const Duration(days: 3);
+    if (durationStr == '1 Minggu') return const Duration(days: 7);
+    return const Duration(hours: 24); 
+  }
+
+  void _calculateTime() {
+    final createdAt = DateTime.parse(widget.rental['created_at']).toLocal();
+    final targetDate = createdAt.add(_parseDurationString(widget.rental['duration']));
+    final now = DateTime.now();
+
+    final diff = targetDate.difference(now);
+
+    if (mounted) {
+      setState(() {
+        if (diff.isNegative) {
+          _isOverdue = true;
+          _remainingTime = Duration.zero;
+        } else {
+          _isOverdue = false;
+          _remainingTime = diff;
+        }
+      });
+    }
+  }
+
+  // Format tulisan waktu agar enak dibaca
+  String _formatDuration(Duration d) {
+    if (_isOverdue) return "Habis (Terlambat!)";
+    String days = d.inDays > 0 ? "${d.inDays} Hari " : "";
+    String hours = (d.inHours % 24).toString().padLeft(2, '0');
+    String minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
+    String seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return "$days$hours:$minutes:$seconds";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rental = widget.rental;
+    final String tanggalSewa = rental['created_at'].toString().split('T')[0];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12), 
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        // Kartunya juga akan bergaris merah jika telat
+        side: BorderSide(color: _isOverdue ? Colors.red.withOpacity(0.5) : Colors.transparent, width: 2)
+      ), 
+      elevation: 3,
+      child: ExpansionTile(
+        leading: Icon(
+          _isOverdue ? Icons.warning_amber_rounded : Icons.person_pin, 
+          color: _isOverdue ? Colors.red : Colors.orange, 
+          size: 36
+        ),
+        title: Text(rental['renter_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("${rental['product_name']} (${rental['qty']} pcs)"),
+              Text("Tgl Sewa: $tanggalSewa | Durasi: ${rental['duration']}"),
+              const SizedBox(height: 4),
+             Row(
+                crossAxisAlignment: CrossAxisAlignment.start, // Biar ikonnya tetap di atas kalau teksnya turun ke bawah
+                children: [
+                  Icon(Icons.timer_outlined, size: 16, color: _isOverdue ? Colors.red : Colors.grey[700]),
+                  const SizedBox(width: 4),
+                  // SOLUSI: Bungkus dengan Expanded
+                  Expanded(
+                    child: Text(
+                      "Sisa Waktu: ${_formatDuration(_remainingTime)}",
+                      style: TextStyle(
+                        color: _isOverdue ? Colors.red : Colors.grey[800], 
+                        fontWeight: _isOverdue ? FontWeight.bold : FontWeight.normal
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Detail Identitas Penyewa:", style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 5),
+                Text("NIK KTP: ${rental['renter_nik']}"),
+                Text("Alamat: ${rental['renter_address']}"),
+                const Divider(),
+                if (rental['rent_proof_url'] != null) ...[
+                  const Text("Bukti Penyerahan Awal:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(rental['rent_proof_url'], height: 150, width: double.infinity, fit: BoxFit.cover)),
+                  const SizedBox(height: 10),
+                ],
+                Text("Total Tagihan: Rp ${rental['total_price']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
+                const SizedBox(height: 15),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.all(12)),
+                    onPressed: widget.onReturn,
+                    icon: const Icon(Icons.assignment_return),
+                    label: const Text("Tandai Dikembalikan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
