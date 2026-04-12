@@ -1,14 +1,30 @@
-import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
-  Future<bool> login(String email, String password) async {
-    await Future.delayed(const Duration(seconds: 2));
+  final _supabase = Supabase.instance.client;
 
-    // Simulasi login (nanti bisa ganti API)
-    if (email == "admin@bureau.com" && password == "123456") {
-      return true;
-    } else {
+  Future<bool> login(String email, String password) async {
+    try {
+      // Meminta Supabase untuk mencocokkan email dan password
+      final AuthResponse res = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      // Jika berhasil dan mendapat sesi (session), kembalikan true
+      if (res.session != null) {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      // Jika email/password salah, Supabase otomatis melempar error ke sini
+      print("Login Gagal: $e");
       return false;
     }
+  }
+
+  // Bonus Fungsi: Untuk Logout (jika nanti kamu butuhkan)
+  Future<void> logout() async {
+    await _supabase.auth.signOut();
   }
 }
