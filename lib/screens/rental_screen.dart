@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert'; 
 import 'dart:io'; 
-import 'dart:async'; // IMPORT BARU: Untuk Fitur Timer Hitung Mundur
+import 'dart:async'; 
 import 'package:path_provider/path_provider.dart'; 
 import 'package:share_plus/share_plus.dart'; 
 import 'package:flutter/material.dart';
@@ -50,7 +50,6 @@ class _RentalScreenState extends State<RentalScreen> {
     final qtyController = TextEditingController(text: '1');
     
     String durasiPilihan = '24 Jam';
-    // FITUR BARU: Tambah opsi 1 Menit untuk Testing
     final listDurasi = ['1 Menit', '12 Jam', '24 Jam', '2 Hari', '3 Hari', '1 Minggu'];
 
     Uint8List? selectedImageBytes;
@@ -496,7 +495,6 @@ class _RentalScreenState extends State<RentalScreen> {
                   itemCount: rentals.length,
                   itemBuilder: (context, index) {
                     final rental = rentals[index];
-                    // MEMANGGIL WIDGET TIMER KHUSUS
                     return ActiveRentalCard(
                       rental: rental,
                       onReturn: () => _showReturnDialog(rental),
@@ -612,7 +610,7 @@ class _RentalScreenState extends State<RentalScreen> {
 }
 
 // ==========================================
-// KELAS BARU: KARTU TIMER HITUNG MUNDUR
+// KELAS BARU: KARTU TIMER HITUNG MUNDUR (DAN MAJU JIKA TELAT)
 // ==========================================
 class ActiveRentalCard extends StatefulWidget {
   final Map<String, dynamic> rental;
@@ -633,7 +631,6 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
   void initState() {
     super.initState();
     _calculateTime();
-    // Memperbarui waktu setiap 1 detik
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _calculateTime();
     });
@@ -645,7 +642,6 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
     super.dispose();
   }
 
-  // Menerjemahkan tulisan durasi dari database menjadi hitungan nyata
   Duration _parseDurationString(String durationStr) {
     if (durationStr == '1 Menit') return const Duration(minutes: 1);
     if (durationStr == '12 Jam') return const Duration(hours: 12);
@@ -656,6 +652,7 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
     return const Duration(hours: 24); 
   }
 
+  // FUNGSI INI DIBEDAH UNTUK BISA HITUNG MAJU KETIKA TELAT
   void _calculateTime() {
     final createdAt = DateTime.parse(widget.rental['created_at']).toLocal();
     final targetDate = createdAt.add(_parseDurationString(widget.rental['duration']));
@@ -667,18 +664,18 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
       setState(() {
         if (diff.isNegative) {
           _isOverdue = true;
-          _remainingTime = Duration.zero;
+          // Jika waktu habis, hitung selisih dari target waktu hingga SEKARANG (Count up)
+          _remainingTime = now.difference(targetDate);
         } else {
           _isOverdue = false;
+          // Jika belum habis, hitung sisa (Count down)
           _remainingTime = diff;
         }
       });
     }
   }
 
-  // Format tulisan waktu agar enak dibaca
   String _formatDuration(Duration d) {
-    if (_isOverdue) return "Habis (Terlambat!)";
     String days = d.inDays > 0 ? "${d.inDays} Hari " : "";
     String hours = (d.inHours % 24).toString().padLeft(2, '0');
     String minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
@@ -695,7 +692,6 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
       margin: const EdgeInsets.only(bottom: 12), 
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        // Kartunya juga akan bergaris merah jika telat
         side: BorderSide(color: _isOverdue ? Colors.red.withOpacity(0.5) : Colors.transparent, width: 2)
       ), 
       elevation: 3,
@@ -714,15 +710,20 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
               Text("${rental['product_name']} (${rental['qty']} pcs)"),
               Text("Tgl Sewa: $tanggalSewa | Durasi: ${rental['duration']}"),
               const SizedBox(height: 4),
-             Row(
-                crossAxisAlignment: CrossAxisAlignment.start, // Biar ikonnya tetap di atas kalau teksnya turun ke bawah
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.timer_outlined, size: 16, color: _isOverdue ? Colors.red : Colors.grey[700]),
+                  Icon(
+                    _isOverdue ? Icons.timer_off_outlined : Icons.timer_outlined, 
+                    size: 16, 
+                    color: _isOverdue ? Colors.red : Colors.grey[700]
+                  ),
                   const SizedBox(width: 4),
-                  // SOLUSI: Bungkus dengan Expanded
                   Expanded(
                     child: Text(
-                      "Sisa Waktu: ${_formatDuration(_remainingTime)}",
+                      _isOverdue 
+                        ? "Habis (Terlambat: ${_formatDuration(_remainingTime)})" 
+                        : "Sisa Waktu: ${_formatDuration(_remainingTime)}",
                       style: TextStyle(
                         color: _isOverdue ? Colors.red : Colors.grey[800], 
                         fontWeight: _isOverdue ? FontWeight.bold : FontWeight.normal
