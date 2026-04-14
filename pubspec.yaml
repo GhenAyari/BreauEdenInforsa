@@ -27,9 +27,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.0
 
 flutter:
   uses-material-design: true
   assets:
     - .env
     - assets/qris.jpg
+    - assets/logo_biro.png
+
+
+# Konfigurasi Splash Screen
+flutter_native_splash:
+  color: "#1565C0" # Warna background (Ini putih. Ubah kode hex-nya kalau mau warna lain)
+  image: assets/logo_biro.png # Path menuju file logomu
+  
+  android_12:
+    color: "#1565C0"
+    image: assets/logo_biro.png
+
