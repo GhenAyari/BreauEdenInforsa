@@ -1,30 +1,49 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final _supabase = Supabase.instance.client;
 
-  Future<bool> login(String email, String password) async {
+  // Sekarang mengembalikan String (Role/Divisi), bukan sekadar true/false
+  Future<String?> login(String email, String password) async {
     try {
-      // Meminta Supabase untuk mencocokkan email dan password
       final AuthResponse res = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
-      // Jika berhasil dan mendapat sesi (session), kembalikan true
-      if (res.session != null) {
-        return true;
+      if (res.session != null && res.user != null) {
+        // Ambil data divisi dari tabel 'pengurus'
+        final userData = await _supabase
+            .from('pengurus')
+            .select('divisi_akses, nama_lengkap')
+            .eq('id', res.user!.id)
+            .maybeSingle();
+
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        
+        if (userData != null) {
+          // Simpan Nama dan Divisi ke memori lokal
+          await prefs.setString("user_role", userData['divisi_akses']);
+          await prefs.setString("user_name", userData['nama_lengkap']);
+          return userData['divisi_akses'];
+        } else {
+          // Fallback jika data di tabel pengurus belum ada
+          await prefs.setString("user_role", "Admin");
+          await prefs.setString("user_name", "Admin Utama");
+          return "Admin";
+        }
       }
-      return false;
+      return null;
     } catch (e) {
-      // Jika email/password salah, Supabase otomatis melempar error ke sini
       print("Login Gagal: $e");
-      return false;
+      return null;
     }
   }
 
-  // Bonus Fungsi: Untuk Logout (jika nanti kamu butuhkan)
   Future<void> logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Hapus memori saat logout
     await _supabase.auth.signOut();
   }
 }

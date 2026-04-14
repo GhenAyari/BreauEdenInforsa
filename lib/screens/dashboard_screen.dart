@@ -1,35 +1,127 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/colors.dart';
 import '../widgets/revenue_card.dart';
 import '../widgets/action_card.dart';
-import 'rental_screen.dart'; // Sudah benar import-nya
+import 'rental_screen.dart'; 
 import 'preorder_screen.dart';
+import '../services/auth_service.dart'; // TAMBAHAN: Untuk memanggil fungsi logout
+import 'login_screen.dart'; // TAMBAHAN: Untuk navigasi balik ke halaman login
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  String _userRole = "";
+  String _userName = "";
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userRole = prefs.getString("user_role") ?? "Admin";
+      _userName = prefs.getString("user_name") ?? "Pengurus";
+      _isLoading = false;
+    });
+  }
+
+  // ==========================================
+  // FITUR BARU: FUNGSI LOGOUT DENGAN KONFIRMASI
+  // ==========================================
+  Future<void> _handleLogout() async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Keluar Akun", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Apakah Anda yakin ingin keluar dari aplikasi?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Keluar")
+          ),
+        ],
+      )
+    ) ?? false;
+
+    if (confirm) {
+      // 1. Panggil fungsi logout dari AuthService untuk membersihkan sesi Supabase & Memori
+      await AuthService().logout();
+      
+      if (mounted) {
+        // 2. Arahkan kembali ke halaman Login dan HAPUS semua riwayat halaman sebelumnya (biar gak bisa di-back)
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false, 
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            const Text("BUREAU",
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Dibungkus Expanded agar teks nama yang panjang tidak bikin error layar (overflow)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("BUREAU", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      Text("Halo, $_userName!", style: const TextStyle(fontSize: 16, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    // Lencana Divisi
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(20)),
+                      child: Text(_userRole, style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    const SizedBox(width: 4),
+                    // TOMBOL LOGOUT
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.redAccent),
+                      tooltip: "Keluar Akun",
+                      onPressed: _handleLogout,
+                    )
+                  ],
+                )
+              ],
+            ),
             const SizedBox(height: 20),
 
-            /// Revenue Card
-            const RevenueCard(),
+            // Hanya Admin dan POS_Barang yang butuh lihat Laporan Keuangan Revenue Card
+            if (_userRole == 'Admin' || _userRole == 'POS_Barang') ...[
+              const RevenueCard(),
+              const SizedBox(height: 20),
+            ],
 
-            const SizedBox(height: 20),
+            const Text("Akses Cepat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
 
-            /// Quick Actions
-           /// Quick Actions
-            /// Quick Actions
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -37,31 +129,21 @@ class DashboardScreen extends StatelessWidget {
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
               children: [
+                // Kotak Penyewaan
+                if (_userRole == 'Admin' || _userRole == 'Penyewaan')
+                  ActionCard(
+                    title: "Penyewaan", 
+                    icon: Icons.shopping_bag,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RentalScreen())),
+                  ),
                 
-                // KOTAK PENYEWAAN YANG SUDAH PINTAR SEKARANG
-                ActionCard(
-                  title: "Penyewaan", 
-                  icon: Icons.shopping_bag,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const RentalScreen()),
-                    );
-                  },
-                ),
-                
-      
-                ActionCard(
-                  title: "Pre-Order", 
-                  icon: Icons.receipt_long,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const PreOrderScreen()),
-                    );
-                  },
-                ),
-                
+                // Kotak Pre-Order
+                if (_userRole == 'Admin' || _userRole == 'PreOrder')
+                  ActionCard(
+                    title: "Pre-Order", 
+                    icon: Icons.receipt_long,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PreOrderScreen())),
+                  ),
               ],
             ),
           ],
