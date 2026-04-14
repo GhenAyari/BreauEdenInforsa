@@ -1,7 +1,13 @@
+import 'dart:io';
+import 'dart:async'; // TAMBAHAN: Untuk mengendalikan Stream secara manual
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart'; 
+import 'package:csv/csv.dart'; 
+import 'package:path_provider/path_provider.dart'; 
+import 'package:share_plus/share_plus.dart'; 
+
 import '../core/colors.dart'; 
 import 'preorder_admin_screen.dart';
 import 'preorder_web_screen.dart';
@@ -16,15 +22,35 @@ class PreOrderScreen extends StatefulWidget {
 class _PreOrderScreenState extends State<PreOrderScreen> {
   final _supabase = Supabase.instance.client;
   
-  // Variabel untuk Search dan Stream Database
   String _searchQuery = "";
-  late Stream<List<Map<String, dynamic>>> _poStream;
+  final TextEditingController _searchController = TextEditingController();
+
+  // ========================================================
+  // PERBAIKAN: Manajemen Data Manual Anti-Hilang
+  // ========================================================
+  StreamSubscription? _poSub;
+  List<Map<String, dynamic>> _allPoList = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Taruh stream di sini agar tidak reload setiap kali ngetik search
-    _poStream = _supabase.from('po_settings').stream(primaryKey: ['id']).order('created_at', ascending: false);
+    // Nyalakan keran data dan simpan ke memori lokal
+    _poSub = _supabase.from('po_settings').stream(primaryKey: ['id']).order('created_at', ascending: false).listen((data) {
+      if (mounted) {
+        setState(() {
+          _allPoList = data;
+          _isLoading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _poSub?.cancel(); // Wajib dimatikan agar tidak bocor memori
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -41,6 +67,7 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
               icon: const Icon(Icons.preview),
               tooltip: "Lihat Web Pembeli",
               onPressed: () {
+                FocusScope.of(context).unfocus();
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const PreorderWebScreen()));
               },
             ),
@@ -55,122 +82,127 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
             ],
           ),
         ),
-        body: Column(
-          children: [
-            // ==========================================
-            // KOTAK PENCARIAN (SEARCH BAR)
-            // ==========================================
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: "Cari nama Form PO...",
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: "Cari nama Form PO...",
+                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                    suffixIcon: _searchQuery.isNotEmpty 
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() { _searchQuery = ""; });
+                            FocusScope.of(context).unfocus();
+                          },
+                        ) 
+                      : null,
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  ),
+                  onChanged: (value) {
+                    setState(() { _searchQuery = value.toLowerCase(); });
+                  },
                 ),
-                onChanged: (value) {
-                  setState(() { _searchQuery = value.toLowerCase(); });
-                },
               ),
-            ),
 
-            // ==========================================
-            // AREA DAFTAR PO (TAB 1 & TAB 2)
-            // ==========================================
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // TAB 1: DAFTAR PO AKTIF
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _poStream,
-                    builder: (context, snapshotSettings) {
-                      if (snapshotSettings.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                      if (!snapshotSettings.hasData || snapshotSettings.data!.isEmpty) return const Center(child: Text("Belum ada Form PO."));
+              // ========================================================
+              // PERBAIKAN: Render langsung dari memori lokal (Bukan StreamBuilder)
+              // ========================================================
+              Expanded(
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator())
+                  : _allPoList.isEmpty
+                      ? const Center(child: Text("Belum ada Form PO."))
+                      : TabBarView(
+                          children: [
+                            Builder(
+                              builder: (context) {
+                                final poList = _allPoList.where((po) {
+                                  final isMatchStatus = po['is_active'] == true;
+                                  final isMatchSearch = po['title'].toString().toLowerCase().contains(_searchQuery);
+                                  return isMatchStatus && isMatchSearch;
+                                }).toList();
 
-                      final allPoList = snapshotSettings.data!;
-                      
-                      // FILTER 1: Hanya yang Aktif. FILTER 2: Sesuai ketikan Search
-                      final poList = allPoList.where((po) {
-                        final isMatchStatus = po['is_active'] == true;
-                        final isMatchSearch = po['title'].toString().toLowerCase().contains(_searchQuery);
-                        return isMatchStatus && isMatchSearch;
-                      }).toList();
+                                if (poList.isEmpty) return Center(child: Text(_searchQuery.isEmpty ? "Belum ada Form PO yang aktif." : "Pencarian tidak ditemukan."));
 
-                      if (poList.isEmpty) return Center(child: Text(_searchQuery.isEmpty ? "Belum ada Form PO yang aktif." : "Pencarian tidak ditemukan."));
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: poList.length,
-                        itemBuilder: (context, index) {
-                          final po = poList[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 2,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: const CircleAvatar(backgroundColor: Colors.blue, child: Icon(Icons.folder, color: Colors.white)),
-                              title: Text(po['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              subtitle: const Text("Lihat pesanan yang belum diambil", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                              onTap: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (context) => PoDetailScreen(poId: po['id'].toString(), poTitle: po['title'], statusFilter: 'Belum Diterima')));
-                              },
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  itemCount: poList.length,
+                                  itemBuilder: (context, index) {
+                                    final po = poList[index];
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        leading: const CircleAvatar(backgroundColor: Colors.blue, child: Icon(Icons.folder, color: Colors.white)),
+                                        title: Text(po['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        subtitle: const Text("Lihat pesanan yang belum diambil", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                                        onTap: () {
+                                          FocusScope.of(context).unfocus();
+                                          Navigator.push(context, MaterialPageRoute(builder: (context) => PoDetailScreen(poId: po['id'].toString(), poTitle: po['title'], statusFilter: 'Belum Diterima')));
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                              }
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
 
-                  // TAB 2: DAFTAR PO SELESAI
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _poStream,
-                    builder: (context, snapshotSettings) {
-                      if (snapshotSettings.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                      if (!snapshotSettings.hasData || snapshotSettings.data!.isEmpty) return const Center(child: Text("Belum ada data form PO."));
+                            Builder(
+                              builder: (context) {
+                                final poList = _allPoList.where((po) => po['title'].toString().toLowerCase().contains(_searchQuery)).toList();
 
-                      final allPoList = snapshotSettings.data!;
-                      
-                      // FILTER 1: Semua Form. FILTER 2: Sesuai ketikan Search
-                      final poList = allPoList.where((po) => po['title'].toString().toLowerCase().contains(_searchQuery)).toList();
+                                if (poList.isEmpty) return const Center(child: Text("Pencarian tidak ditemukan."));
 
-                      if (poList.isEmpty) return const Center(child: Text("Pencarian tidak ditemukan."));
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: poList.length,
-                        itemBuilder: (context, index) {
-                          final po = poList[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 2,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.folder_special, color: Colors.white)),
-                              title: Text(po['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              subtitle: const Text("Lihat riwayat pesanan selesai", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                              onTap: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (context) => PoDetailScreen(poId: po['id'].toString(), poTitle: "${po['title']} (Selesai)", statusFilter: 'Sudah Diterima')));
-                              },
+                                return ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  itemCount: poList.length,
+                                  itemBuilder: (context, index) {
+                                    final po = poList[index];
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.folder_special, color: Colors.white)),
+                                        title: Text(po['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        subtitle: const Text("Lihat riwayat pesanan selesai", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                                        onTap: () {
+                                          FocusScope.of(context).unfocus();
+                                          Navigator.push(context, MaterialPageRoute(builder: (context) => PoDetailScreen(poId: po['id'].toString(), poTitle: "${po['title']} (Selesai)", statusFilter: 'Sudah Diterima')));
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                              }
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
+                          ],
+                        ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PreorderAdminScreen())),
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const PreorderAdminScreen()));
+          },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add),
@@ -182,7 +214,7 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
 }
 
 // ============================================================================
-// HALAMAN DETAIL PO (Daftar Pengisi) - SEKARANG STATEFUL AGAR BISA SEARCH
+// HALAMAN DETAIL PO (Daftar Pengisi)
 // ============================================================================
 class PoDetailScreen extends StatefulWidget {
   final String poId;
@@ -198,23 +230,89 @@ class PoDetailScreen extends StatefulWidget {
 class _PoDetailScreenState extends State<PoDetailScreen> {
   final _supabase = Supabase.instance.client;
   
-  // Variabel untuk Search
   String _searchQuery = "";
-  late Stream<List<Map<String, dynamic>>> _subsStream;
+  final TextEditingController _searchController = TextEditingController();
+
+  // ========================================================
+  // PERBAIKAN: Manajemen Data Manual Anti-Hilang
+  // ========================================================
+  StreamSubscription? _subsSub;
+  List<Map<String, dynamic>> _allSubsList = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Taruh stream di sini agar tidak reload setiap kali ngetik search
-    _subsStream = _supabase.from('po_submissions').stream(primaryKey: ['id']).eq('form_id', widget.poId).order('submitted_at', ascending: false);
+    _subsSub = _supabase.from('po_submissions').stream(primaryKey: ['id']).order('submitted_at', ascending: false).listen((data) {
+      if (mounted) {
+        setState(() {
+          _allSubsList = data;
+          _isLoading = false;
+        });
+      }
+    });
   }
 
-  // Helper untuk mencari nama pembeli dari JSON
+  @override
+  void dispose() {
+    _subsSub?.cancel(); 
+    _searchController.dispose();
+    super.dispose();
+  }
+
   String _getCustomerName(Map<String, dynamic> answers) {
     for (var key in answers.keys) {
       if (key.toLowerCase().contains("nama")) { return answers[key].toString(); }
     }
     return answers.isNotEmpty ? answers.values.first.toString() : "Tanpa Nama";
+  }
+
+  Future<void> _exportToCSV() async {
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    
+    try {
+      final response = await _supabase.from('po_submissions').select().eq('form_id', widget.poId).eq('status', widget.statusFilter).order('submitted_at', ascending: false);
+      final submissions = List<Map<String, dynamic>>.from(response);
+
+      if (submissions.isEmpty) {
+        if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tidak ada data untuk diekspor!"), backgroundColor: Colors.orange)); }
+        return;
+      }
+
+      Set<String> answerKeys = {};
+      for (var sub in submissions) {
+        final Map<String, dynamic> answers = sub['answers'] ?? {};
+        answerKeys.addAll(answers.keys);
+      }
+
+      List<List<dynamic>> csvData = [];
+      List<String> headers = ["Nama Pelanggan", "Tanggal Submit", "Status Pesanan", ...answerKeys];
+      csvData.add(headers);
+
+      for (var sub in submissions) {
+        final Map<String, dynamic> answers = sub['answers'] ?? {};
+        String customerName = _getCustomerName(answers);
+        
+        List<dynamic> row = [ customerName, sub['submitted_at'].toString().split('T')[0], sub['status'] ];
+        for (var key in answerKeys) { row.add(answers[key]?.toString() ?? "-"); }
+        csvData.add(row);
+      }
+
+      String csv = const ListToCsvConverter().convert(csvData);
+      final dir = await getTemporaryDirectory();
+      final safeTitle = widget.poTitle.replaceAll(" ", "_").replaceAll("/", "_");
+      final path = '${dir.path}/Data_PO_$safeTitle.csv';
+      
+      final file = File(path);
+      await file.writeAsString(csv);
+
+      if (mounted) {
+        Navigator.pop(context); 
+        await Share.shareXFiles([XFile(path)], text: 'Berikut adalah lampiran file Excel/CSV untuk data: ${widget.poTitle}');
+      }
+    } catch (e) {
+      if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal Ekspor: $e"), backgroundColor: Colors.red)); }
+    }
   }
 
   Future<void> _markAsReceived(BuildContext context, dynamic submissionId, String customerName) async {
@@ -223,10 +321,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
       await _supabase.from('po_submissions').update({'status': 'Sudah Diterima'}).eq('id', submissionId);
       if (context.mounted) Navigator.pop(context); 
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-      }
+      if (context.mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)); }
     }
   }
 
@@ -250,18 +345,13 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
       await _supabase.from('po_submissions').delete().eq('id', submissionId);
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-      }
+      if (context.mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)); }
     }
   }
 
   Future<void> _openUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint("Gagal membuka link: $urlString");
-    }
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) { debugPrint("Gagal membuka link: $urlString"); }
   }
 
   @override
@@ -271,143 +361,161 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
         title: Text(widget.poTitle), 
         backgroundColor: widget.statusFilter == 'Sudah Diterima' ? Colors.green : AppColors.primary, 
         foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          // ==========================================
-          // KOTAK PENCARIAN (SEARCH BAR)
-          // ==========================================
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Cari nama mahasiswa...",
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-              onChanged: (value) {
-                setState(() { _searchQuery = value.toLowerCase(); });
-              },
-            ),
-          ),
-
-          // ==========================================
-          // DAFTAR PENGISI PO
-          // ==========================================
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _subsStream,
-              builder: (context, snapshotSubs) {
-                if (snapshotSubs.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (!snapshotSubs.hasData || snapshotSubs.data!.isEmpty) return const Center(child: Text("Belum ada pesanan untuk PO ini.", style: TextStyle(color: Colors.grey, fontSize: 16)));
-
-                final allSubmissions = snapshotSubs.data!;
-                
-                // FILTER: Sesuaikan dengan status (Belum/Sudah Diterima) DAN Nama yang dicari
-                final filteredSubmissions = allSubmissions.where((sub) {
-                  final customerName = _getCustomerName(sub['answers'] ?? {});
-                  final isMatchStatus = sub['status'] == widget.statusFilter;
-                  final isMatchSearch = customerName.toLowerCase().contains(_searchQuery);
-                  
-                  return isMatchStatus && isMatchSearch;
-                }).toList();
-
-                if (filteredSubmissions.isEmpty) {
-                  return Center(child: Text(_searchQuery.isEmpty ? "Belum ada pesanan di kategori ini." : "Pemesan tidak ditemukan.", style: const TextStyle(color: Colors.grey, fontSize: 15)));
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: filteredSubmissions.length,
-                  itemBuilder: (context, subIndex) {
-                    final sub = filteredSubmissions[subIndex];
-                    final Map<String, dynamic> answers = sub['answers'] ?? {};
-                    String customerName = _getCustomerName(answers);
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 2,
-                      child: ExpansionTile(
-                        leading: CircleAvatar(backgroundColor: widget.statusFilter == 'Sudah Diterima' ? Colors.green : Colors.orange, child: Icon(widget.statusFilter == 'Sudah Diterima' ? Icons.check : Icons.person, color: Colors.white, size: 20)),
-                        title: Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("Tgl Submit: ${sub['submitted_at'].toString().split('T')[0]}", style: const TextStyle(fontSize: 12)),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text("Detail Jawaban Pembeli:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                                const Divider(),
-                                
-                                ...answers.entries.map((entry) {
-                                  String valStr = entry.value.toString();
-                                  bool isLink = valStr.startsWith("http");
-                                  bool isImage = isLink && (valStr.toLowerCase().contains(".jpg") || valStr.toLowerCase().contains(".png") || valStr.toLowerCase().contains(".jpeg"));
-                                  
-                                  Widget contentWidget;
-                                  if (isImage) {
-                                    contentWidget = GestureDetector(
-                                      onTap: () => _openUrl(valStr),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(top: 4), height: 120, width: double.infinity,
-                                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
-                                        child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(valStr, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Center(child: Text("Gagal muat foto")))),
-                                      ),
-                                    );
-                                  } else if (isLink) {
-                                    contentWidget = GestureDetector(
-                                      onTap: () => _openUrl(valStr),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade200)),
-                                        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.download, color: Colors.blue, size: 18), SizedBox(width: 8), Text("Buka Dokumen/File", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13))]),
-                                      ),
-                                    );
-                                  } else {
-                                    contentWidget = Text(valStr, style: const TextStyle(fontWeight: FontWeight.bold));
-                                  }
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12.0),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(flex: 2, child: Text("${entry.key} : ", style: const TextStyle(color: Colors.grey))),
-                                        Expanded(flex: 3, child: contentWidget),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                                
-                                const SizedBox(height: 15),
-                                
-                                if (widget.statusFilter == 'Belum Diterima')
-                                  Row(
-                                    children: [
-                                      Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () => _deleteSubmission(context, sub['id']), icon: const Icon(Icons.delete, size: 18), label: const Text("Hapus"))),
-                                      const SizedBox(width: 10),
-                                      Expanded(flex: 2, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), onPressed: () => _markAsReceived(context, sub['id'], customerName), icon: const Icon(Icons.check, size: 18), label: const Text("Tandai Diambil"))),
-                                    ],
-                                  )
-                                else
-                                  Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.done_all, color: Colors.green), SizedBox(width: 8), Text("PESANAN SUDAH SELESAI", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))]))
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
+        actions: [
+          IconButton(icon: const Icon(Icons.download), tooltip: "Ekspor ke CSV/Excel", onPressed: _exportToCSV)
         ],
+      ),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
+                controller: _searchController, 
+                decoration: InputDecoration(
+                  hintText: "Cari nama mahasiswa...",
+                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  suffixIcon: _searchQuery.isNotEmpty 
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() { _searchQuery = ""; });
+                          FocusScope.of(context).unfocus();
+                        },
+                      ) 
+                    : null,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+                onChanged: (value) {
+                  setState(() { _searchQuery = value.toLowerCase(); });
+                },
+              ),
+            ),
+
+            // ========================================================
+            // PERBAIKAN: Render langsung dari memori lokal
+            // ========================================================
+            Expanded(
+              child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _allSubsList.isEmpty
+                    ? const Center(child: Text("Belum ada pesanan untuk PO ini.", style: TextStyle(color: Colors.grey, fontSize: 16)))
+                    : Builder(
+                        builder: (context) {
+                          final filteredSubmissions = _allSubsList.where((sub) {
+                            final isMatchFormId = sub['form_id'].toString() == widget.poId; 
+                            if (!isMatchFormId) return false;
+
+                            final customerName = _getCustomerName(sub['answers'] ?? {});
+                            final isMatchStatus = sub['status'] == widget.statusFilter;
+                            final isMatchSearch = customerName.toLowerCase().contains(_searchQuery);
+                            
+                            return isMatchStatus && isMatchSearch;
+                          }).toList();
+
+                          if (filteredSubmissions.isEmpty) {
+                            return Center(child: Text(_searchQuery.isEmpty ? "Belum ada pesanan di kategori ini." : "Pemesan tidak ditemukan.", style: const TextStyle(color: Colors.grey, fontSize: 15)));
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: filteredSubmissions.length,
+                            itemBuilder: (context, subIndex) {
+                              final sub = filteredSubmissions[subIndex];
+                              final Map<String, dynamic> answers = sub['answers'] ?? {};
+                              String customerName = _getCustomerName(answers);
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 2,
+                                child: ExpansionTile(
+                                  onExpansionChanged: (expanded) {
+                                    if (expanded) FocusScope.of(context).unfocus();
+                                  },
+                                  leading: CircleAvatar(backgroundColor: widget.statusFilter == 'Sudah Diterima' ? Colors.green : Colors.orange, child: Icon(widget.statusFilter == 'Sudah Diterima' ? Icons.check : Icons.person, color: Colors.white, size: 20)),
+                                  title: Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text("Tgl Submit: ${sub['submitted_at'].toString().split('T')[0]}", style: const TextStyle(fontSize: 12)),
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text("Detail Jawaban Pembeli:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                                          const Divider(),
+                                          
+                                          ...answers.entries.map((entry) {
+                                            String valStr = entry.value.toString();
+                                            bool isLink = valStr.startsWith("http");
+                                            bool isImage = isLink && (valStr.toLowerCase().contains(".jpg") || valStr.toLowerCase().contains(".png") || valStr.toLowerCase().contains(".jpeg"));
+                                            
+                                            Widget contentWidget;
+                                            if (isImage) {
+                                              contentWidget = GestureDetector(
+                                                onTap: () => _openUrl(valStr),
+                                                child: Container(
+                                                  margin: const EdgeInsets.only(top: 4), height: 120, width: double.infinity,
+                                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                                                  child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(valStr, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Center(child: Text("Gagal muat foto")))),
+                                                ),
+                                              );
+                                            } else if (isLink) {
+                                              contentWidget = GestureDetector(
+                                                onTap: () => _openUrl(valStr),
+                                                child: Container(
+                                                  margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade200)),
+                                                  child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.download, color: Colors.blue, size: 18), SizedBox(width: 8), Text("Buka Dokumen/File", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13))]),
+                                                ),
+                                              );
+                                            } else {
+                                              contentWidget = Text(valStr, style: const TextStyle(fontWeight: FontWeight.bold));
+                                            }
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(bottom: 12.0),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(flex: 2, child: Text("${entry.key} : ", style: const TextStyle(color: Colors.grey))),
+                                                  Expanded(flex: 3, child: contentWidget),
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
+                                          
+                                          const SizedBox(height: 15),
+                                          
+                                          if (widget.statusFilter == 'Belum Diterima')
+                                            Row(
+                                              children: [
+                                                Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () => _deleteSubmission(context, sub['id']), icon: const Icon(Icons.delete, size: 18), label: const Text("Hapus"))),
+                                                const SizedBox(width: 10),
+                                                Expanded(flex: 2, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), onPressed: () => _markAsReceived(context, sub['id'], customerName), icon: const Icon(Icons.check, size: 18), label: const Text("Tandai Diambil"))),
+                                              ],
+                                            )
+                                          else
+                                            Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.done_all, color: Colors.green), SizedBox(width: 8), Text("PESANAN SUDAH SELESAI", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))]))
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        }
+                      ),
+            ),
+          ],
+        ),
       ),
     );
   }
