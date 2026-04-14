@@ -41,6 +41,24 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   // ==========================================
+  // RUMUS SAKTI: MENGHITUNG TAGIHAN BERDASARKAN JAM
+  // ==========================================
+  int _hitungTotalTagihan(int hargaPerHari, int qty, String durasiStr) {
+    double jam = 24.0; // Default 1 Hari = 24 Jam
+    
+    // Konversi durasi string menjadi jam
+    if (durasiStr == '1 Menit') jam = 1 / 60; // Untuk kebutuhan testing cepat
+    else if (durasiStr == '12 Jam') jam = 12.0;
+    else if (durasiStr == '24 Jam') jam = 24.0;
+    else if (durasiStr == '2 Hari') jam = 48.0;
+    else if (durasiStr == '3 Hari') jam = 72.0;
+    else if (durasiStr == '1 Minggu') jam = 168.0;
+
+    // Rumus: (Harga / 24 jam) * Jumlah Jam * Quantity
+    return ((hargaPerHari / 24) * jam * qty).toInt();
+  }
+
+  // ==========================================
   // FUNGSI 1: FORM SEWA & UPLOAD BUKTI SERAH
   // ==========================================
   void _showRentalFormDialog(Map<String, dynamic> product) {
@@ -87,6 +105,10 @@ class _RentalScreenState extends State<RentalScreen> {
               }
             }
 
+            // HITUNG TAGIHAN SECARA LIVE DI DALAM FORM
+            int qtyReal = int.tryParse(qtyController.text.trim()) ?? 0;
+            int totalTagihanLive = _hitungTotalTagihan(product['price'], qtyReal, durasiPilihan);
+
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Text("Sewa: ${product['name']}", style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -94,7 +116,7 @@ class _RentalScreenState extends State<RentalScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text("Stok Tersedia: ${product['stock']} | Harga Sewa: Rp ${product['price']}", style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                    Text("Stok Tersedia: ${product['stock']} | Tarif: Rp ${product['price']}/hari", style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
                     Text("Tanggal Sewa: $tanggalHariIni", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 15),
@@ -132,7 +154,8 @@ class _RentalScreenState extends State<RentalScreen> {
                             keyboardType: TextInputType.number, 
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
                             decoration: InputDecoration(labelText: "Jumlah", prefixIcon: const Icon(Icons.shopping_cart), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), errorText: errorQty),
-                            onChanged: (_) { if (errorQty != null) setStateDialog(() => errorQty = null); }
+                            // Update UI setiap kali angka qty diubah
+                            onChanged: (_) { setStateDialog(() { errorQty = null; }); }
                           )
                         ),
                         const SizedBox(width: 10),
@@ -142,11 +165,27 @@ class _RentalScreenState extends State<RentalScreen> {
                             value: durasiPilihan, 
                             decoration: InputDecoration(labelText: "Durasi Sewa", border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))), 
                             items: listDurasi.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(), 
+                            // Update UI setiap kali durasi diganti
                             onChanged: (val) => setStateDialog(() => durasiPilihan = val!)
                           )
                         ),
                       ],
                     ),
+                    
+                    const SizedBox(height: 15),
+                    // UI BARU: PREVIEW TOTAL TAGIHAN
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.green.shade200)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Total Tagihan:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                          Text("Rp $totalTagihanLive", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+                        ],
+                      ),
+                    ),
+
                     const Divider(height: 30),
                     const Text("Foto Bukti Penyerahan:", style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
@@ -201,7 +240,8 @@ class _RentalScreenState extends State<RentalScreen> {
                     }
                     
                     Navigator.pop(context); 
-                    _prosesSewa(product, namaController.text.trim(), nikController.text.trim(), alamatController.text.trim(), qtySewa, durasiPilihan, selectedImageBytes, imageExtension);
+                    // Mengirim totalTagihanLive yang sudah dihitung ke database
+                    _prosesSewa(product, namaController.text.trim(), nikController.text.trim(), alamatController.text.trim(), qtySewa, durasiPilihan, selectedImageBytes, imageExtension, totalTagihanLive);
                   },
                   child: const Text("Simpan & Sewakan"),
                 )
@@ -213,7 +253,7 @@ class _RentalScreenState extends State<RentalScreen> {
     );
   }
 
-  Future<void> _prosesSewa(Map<String, dynamic> product, String nama, String nik, String alamat, int qty, String durasi, Uint8List? imgBytes, String? imgExt) async {
+  Future<void> _prosesSewa(Map<String, dynamic> product, String nama, String nik, String alamat, int qty, String durasi, Uint8List? imgBytes, String? imgExt, int totalTagihan) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
       String? rentProofUrl;
@@ -230,7 +270,7 @@ class _RentalScreenState extends State<RentalScreen> {
         'renter_address': alamat,
         'qty': qty,
         'duration': durasi,
-        'total_price': (product['price'] * qty), 
+        'total_price': totalTagihan, // Nilai sudah dibagi dengan jam
         'status': 'Dipinjam',
         'rent_proof_url': rentProofUrl
       });
@@ -468,7 +508,7 @@ class _RentalScreenState extends State<RentalScreen> {
                       child: ListTile(
                         leading: CircleAvatar(backgroundColor: Colors.grey[200], backgroundImage: item['image_url'] != null ? NetworkImage(item['image_url']) : null, child: item['image_url'] == null ? const Icon(Icons.handshake, color: Colors.grey) : null),
                         title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("Stok Tersedia: ${item['stock']}\nHarga Sewa: Rp ${item['price']}"),
+                        subtitle: Text("Stok Tersedia: ${item['stock']}\nTarif: Rp ${item['price']}/hari"),
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: isHabis ? Colors.grey : AppColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                           onPressed: isHabis ? null : () => _showRentalFormDialog(item),
@@ -652,7 +692,6 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
     return const Duration(hours: 24); 
   }
 
-  // FUNGSI INI DIBEDAH UNTUK BISA HITUNG MAJU KETIKA TELAT
   void _calculateTime() {
     final createdAt = DateTime.parse(widget.rental['created_at']).toLocal();
     final targetDate = createdAt.add(_parseDurationString(widget.rental['duration']));
@@ -664,11 +703,9 @@ class _ActiveRentalCardState extends State<ActiveRentalCard> {
       setState(() {
         if (diff.isNegative) {
           _isOverdue = true;
-          // Jika waktu habis, hitung selisih dari target waktu hingga SEKARANG (Count up)
           _remainingTime = now.difference(targetDate);
         } else {
           _isOverdue = false;
-          // Jika belum habis, hitung sisa (Count down)
           _remainingTime = diff;
         }
       });

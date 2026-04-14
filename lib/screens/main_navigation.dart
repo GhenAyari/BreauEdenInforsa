@@ -60,9 +60,12 @@ class _MainNavigationState extends State<MainNavigation> {
       ]);
     } 
     else if (_userRole == 'Penyewaan') {
-      _pages.add(const RentalScreen());
-      _destinations.add(const NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), selectedIcon: Icon(Icons.shopping_bag), label: "Sewa"));
-    } 
+      _pages.addAll([const RentalScreen(), const StockScreen()]);
+      _destinations.addAll([
+        const NavigationDestination(icon: Icon(Icons.shopping_bag_outlined), selectedIcon: Icon(Icons.shopping_bag), label: "Sewa"),
+        const NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: "Stock"),
+      ]);
+    }
     else if (_userRole == 'PreOrder') {
       _pages.add(const PreOrderScreen());
       _destinations.add(const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: "PO"));

@@ -7,6 +7,7 @@ import 'rental_screen.dart';
 import 'preorder_screen.dart';
 import '../services/auth_service.dart'; // TAMBAHAN: Untuk memanggil fungsi logout
 import 'login_screen.dart'; // TAMBAHAN: Untuk navigasi balik ke halaman login
+import 'log_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -144,6 +145,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.receipt_long,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PreOrderScreen())),
                   ),
+                  // Kotak Riwayat Aktivitas (Bisa dilihat semua orang, tapi RLS Supabase yang memfilter isinya)
+                ActionCard(
+                  title: "Riwayat", 
+                  icon: Icons.history,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LogScreen())),
+                ),
               ],
             ),
           ],
