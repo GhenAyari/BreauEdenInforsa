@@ -4,22 +4,22 @@ import '../core/colors.dart';
 class ActionCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  final VoidCallback? onTap; // <--- KUNCI UTAMANYA DI SINI
+  final VoidCallback? onTap; 
 
   const ActionCard({
     super.key,
     required this.title,
     required this.icon,
-    this.onTap, // <--- TAMBAHKAN DI SINI
+    this.onTap, 
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      // Hapus margin atau elevation di sini jika ada
+     
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
-        onTap: onTap, // <--- HUBUNGKAN KE PARAMETER DI ATAS
+        onTap: onTap, 
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

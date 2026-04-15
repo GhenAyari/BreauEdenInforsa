@@ -387,10 +387,7 @@ class _RentalScreenState extends State<RentalScreen> {
       if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)); }
     }
   }
-
-  // ==========================================
-  // FUNGSI 3: EKSPOR CSV & HAPUS RIWAYAT
-  // ==========================================
+  
   Future<void> _exportRentalsToCSV(List<Map<String, dynamic>> rentals) async {
     List<List<dynamic>> rows = [];
     rows.add(['LAPORAN RIWAYAT PENYEWAAN BARANG']);
@@ -465,9 +462,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
 
-  // ==========================================
-  // RENDER UI: 3 TABS
-  // ==========================================
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -649,9 +643,7 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 }
 
-// ==========================================
-// KELAS BARU: KARTU TIMER HITUNG MUNDUR (DAN MAJU JIKA TELAT)
-// ==========================================
+
 class ActiveRentalCard extends StatefulWidget {
   final Map<String, dynamic> rental;
   final VoidCallback onReturn;

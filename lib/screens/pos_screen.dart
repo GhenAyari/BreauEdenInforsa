@@ -37,7 +37,7 @@ class _PosScreenState extends State<PosScreen> {
     _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'store_stand').order('name');
   }
 
-  // --- FUNGSI DATABASE (SUPABASE) ---
+
 
   Future<void> _checkActiveSession() async {
     try {
@@ -62,7 +62,7 @@ class _PosScreenState extends State<PosScreen> {
         'operator_name': operator,
         'stand_name': standName, 
         'status': 'open',
-        'modal_awal': 0  // <--- TAMBAHKAN BARIS INI (Kirim angka 0 otomatis)
+        'modal_awal': 0  
       }).select('id').single();
 
       if (mounted) {
@@ -312,7 +312,6 @@ class _PosScreenState extends State<PosScreen> {
     }
   }
 
-  // --- FUNGSI LOGIKA KERANJANG ---
   double get _cartTotal => _cart.fold(0, (sum, item) => sum + (item['price'] * item['qty']));
 
   void _addToCart(Map<String, dynamic> product) {
@@ -347,7 +346,7 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
-  // --- UI DIALOGS ---
+
 
   void _showOpenSessionDialog() {
     final operatorController = TextEditingController();
@@ -357,7 +356,6 @@ class _PosScreenState extends State<PosScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        // Variabel lokal untuk menyimpan pesan error
         String? errorStandName;
         String? errorOperator;
 

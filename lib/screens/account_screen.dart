@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart'; 
+import '../main.dart'; 
 import '../core/colors.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -12,18 +14,34 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   final _supabase = Supabase.instance.client;
-  late Stream<List<Map<String, dynamic>>> _pengurusStream;
+  
+  List<Map<String, dynamic>> _pengurusList = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Tarik data pengurus secara real-time
-    _pengurusStream = _supabase.from('pengurus').stream(primaryKey: ['id']).order('nama_lengkap', ascending: true);
+    _tarikDataPengurus(); 
   }
 
-  // ==========================================
-  // FITUR CREATE: TAMBAH PENGURUS BARU
-  // ==========================================
+  Future<void> _tarikDataPengurus() async {
+    if (mounted) setState(() => _isLoading = true);
+    try {
+      // Menggunakan .select() biasa agar tidak bergantung pada setting Realtime Supabase
+      final data = await _supabase.from('pengurus').select().order('nama_lengkap', ascending: true);
+      if (mounted) {
+        setState(() {
+          _pengurusList = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error tarik pengurus: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+ 
   Future<void> _showAddUserDialog() async {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
@@ -72,21 +90,21 @@ class _AccountScreenState extends State<AccountScreen> {
                   setDialogState(() => isLoading = true);
 
                   try {
-                    // MENGGUNAKAN JALUR BELAKANG (SERVICE ROLE) AGAR TIDAK LOGOUT
+               
                     final url = dotenv.env['SUPABASE_URL'] ?? 'https://lukiszwznteofbswbdbo.supabase.co';
                     final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
                     
                     if (serviceKey.isEmpty) throw "Kunci SUPABASE_SERVICE_KEY belum dipasang di .env!";
 
-                    // Buat Client Klien Rahasia
+            
                     final adminClient = SupabaseClient(url, serviceKey);
 
-                    // 1. Bikin Akun di brankas Auth Supabase
+               
                     final userRes = await adminClient.auth.admin.createUser(
                       AdminUserAttributes(
                         email: emailCtrl.text.trim(),
                         password: passCtrl.text,
-                        emailConfirm: true, // Otomatis terkonfirmasi
+                        emailConfirm: true, 
                       ),
                     );
 
@@ -99,6 +117,8 @@ class _AccountScreenState extends State<AccountScreen> {
                         'status': 'Aktif'
                       });
                     }
+
+                    _tarikDataPengurus(); // <--- REFRESH PAKSA SETELAH NAMBAH DATA
 
                     if (mounted) {
                       Navigator.pop(context);
@@ -118,9 +138,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // ==========================================
-  // FITUR UPDATE: EDIT DATA PENGURUS
-  // ==========================================
   Future<void> _showEditUserDialog(Map<String, dynamic> user) async {
     final nameCtrl = TextEditingController(text: user['nama_lengkap']);
     String selectedRole = user['divisi_akses'];
@@ -171,6 +188,8 @@ class _AccountScreenState extends State<AccountScreen> {
                       'status': selectedStatus,
                     }).eq('id', user['id']);
 
+                    _tarikDataPengurus(); // <--- REFRESH PAKSA SETELAH UPDATE DATA
+
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Data berhasil diupdate!"), backgroundColor: Colors.green));
@@ -193,47 +212,98 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Manajemen Akun"),
-        backgroundColor: AppColors.primary,
+        title: const Text("Pengaturan & Akun"),
+        backgroundColor: AppColors.primary, 
         foregroundColor: Colors.white,
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _pengurusStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada data pengurus."));
-
-          final pengurusList = snapshot.data!;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: pengurusList.length,
-            itemBuilder: (context, index) {
-              final user = pengurusList[index];
-              final bool isAktif = user['status'] == 'Aktif';
-
-              return Card(
-                elevation: 2,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: isAktif ? AppColors.primary : Colors.grey,
-                    child: const Icon(Icons.person, color: Colors.white),
+      body: Column(
+        children: [
+          
+          // SAKLAR DARK MODE
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: ValueListenableBuilder<ThemeMode>(
+              valueListenable: themeNotifier, 
+              builder: (context, currentMode, child) {
+                final isDark = currentMode == ThemeMode.dark;
+                
+                return Card(
+                  elevation: 2,
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: SwitchListTile(
+                    title: const Text("Mode Gelap", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Ubah tampilan aplikasi menjadi gelap"),
+                    secondary: Icon(
+                      isDark ? Icons.dark_mode : Icons.light_mode, 
+                      color: isDark ? Colors.amber : Colors.orange
+                    ),
+                    value: isDark,
+                    onChanged: (value) async {
+                      themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      prefs.setBool('is_dark_mode', value);
+                    },
                   ),
-                  title: Text(user['nama_lengkap'], style: TextStyle(fontWeight: FontWeight.bold, decoration: isAktif ? null : TextDecoration.lineThrough)),
-                  subtitle: Text("Divisi: ${user['divisi_akses']}\nStatus: ${user['status'] ?? 'Aktif'}"),
-                  isThreeLine: true,
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.orange),
-                    onPressed: () => _showEditUserDialog(user),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                );
+              }
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Daftar Pengurus (Admin)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                // Tombol Refresh Kecil Buat Jaga-Jaga
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.grey, size: 20),
+                  onPressed: _tarikDataPengurus,
+                  tooltip: "Refresh Daftar",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                )
+              ],
+            ),
+          ),
+
+          // DAFTAR PENGURUS
+          Expanded(
+            child: _isLoading 
+              ? const Center(child: CircularProgressIndicator())
+              : _pengurusList.isEmpty
+                  ? const Center(child: Text("Belum ada data pengurus."))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _pengurusList.length,
+                      itemBuilder: (context, index) {
+                        final user = _pengurusList[index];
+                        final bool isAktif = user['status'] == 'Aktif';
+
+                        return Card(
+                          elevation: 2,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: CircleAvatar(
+                              backgroundColor: isAktif ? AppColors.primary : Colors.grey,
+                              child: const Icon(Icons.person, color: Colors.white),
+                            ),
+                            title: Text(user['nama_lengkap'], style: TextStyle(fontWeight: FontWeight.bold, decoration: isAktif ? null : TextDecoration.lineThrough)),
+                            subtitle: Text("Divisi: ${user['divisi_akses']}\nStatus: ${user['status'] ?? 'Aktif'}"),
+                            isThreeLine: true,
+                            trailing: IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.orange),
+                              onPressed: () => _showEditUserDialog(user),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddUserDialog,

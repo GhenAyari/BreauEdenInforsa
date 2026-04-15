@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   final _supabase = Supabase.instance.client;
 
-  // Sekarang mengembalikan String (Role/Divisi), bukan sekadar true/false
+
   Future<String?> login(String email, String password) async {
     try {
       final AuthResponse res = await _supabase.auth.signInWithPassword(
@@ -43,7 +43,7 @@ class AuthService {
 
   Future<void> logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Hapus memori saat logout
+    await prefs.clear(); 
     await _supabase.auth.signOut();
   }
 }

@@ -16,20 +16,20 @@ class _LogScreenState extends State<LogScreen> {
   @override
   void initState() {
     super.initState();
-    // Menarik data dari CCTV kita, diurutkan dari yang paling baru
+  
     _logStream = _supabase
         .from('log_aktivitas')
         .stream(primaryKey: ['id'])
         .order('waktu', ascending: false);
   }
 
-  // Fungsi untuk memformat tanggal & jam biar enak dibaca
+ 
   String _formatDateTime(String isoString) {
     DateTime dt = DateTime.parse(isoString).toLocal();
     return "${dt.day}/${dt.month}/${dt.year} - ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
-  // Menentukan Ikon dan Warna berdasarkan Jenis Aksi
+ 
   Icon _getAksiIcon(String aksi) {
     if (aksi == 'TAMBAH') return const Icon(Icons.add_circle, color: Colors.green);
     if (aksi == 'UBAH') return const Icon(Icons.edit, color: Colors.orange);

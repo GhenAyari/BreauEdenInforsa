@@ -40,7 +40,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
     }
   }
 
-  // FUNGSI BARU: Jeda / Aktifkan Form
+
   Future<void> _togglePoStatus(String formId, bool currentStatus, String title) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
@@ -65,7 +65,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Katalog Form Web PO"), // Judul diubah agar lebih pas
+        title: const Text("Katalog Form Web PO"), 
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
@@ -88,13 +88,13 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
             itemBuilder: (context, index) {
               final po = poList[index]; 
               final String bannerUrl = po['banner_url'] ?? '';
-              final bool isActive = po['is_active'] == true; // Cek status aktif/jeda
+              final bool isActive = po['is_active'] == true; 
 
               return Card(
                 clipBehavior: Clip.antiAlias,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: isActive ? 3 : 1, // Kalau dijeda, bayangannya redup
-                color: isActive ? Colors.white : Colors.grey.shade200, // Kalau dijeda, kotaknya agak abu-abu
+                elevation: isActive ? 3 : 1, 
+                color: isActive ? Colors.white : Colors.grey.shade200, 
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -108,7 +108,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
                                 ? Image.network(bannerUrl, fit: BoxFit.cover, color: isActive ? null : Colors.grey, colorBlendMode: isActive ? null : BlendMode.saturation) // Gambar hitam putih kalau dijeda
                                 : const Icon(Icons.image, size: 50, color: Colors.grey),
                           ),
-                          // LABEL INDIKATOR AKTIF/DIJEDA DI POJOK KANAN ATAS
+                  
                           Positioned(
                             top: 8, right: 8,
                             child: Container(
@@ -136,7 +136,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                // TOMBOL JEDA / PLAY
+                          
                                 IconButton(
                                   icon: Icon(isActive ? Icons.pause_circle_outline : Icons.play_circle_outline, color: isActive ? Colors.orange : Colors.green, size: 20),
                                   tooltip: isActive ? "Jeda Form" : "Aktifkan Form",

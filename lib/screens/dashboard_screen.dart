@@ -5,8 +5,8 @@ import '../widgets/revenue_card.dart';
 import '../widgets/action_card.dart';
 import 'rental_screen.dart'; 
 import 'preorder_screen.dart';
-import '../services/auth_service.dart'; // TAMBAHAN: Untuk memanggil fungsi logout
-import 'login_screen.dart'; // TAMBAHAN: Untuk navigasi balik ke halaman login
+import '../services/auth_service.dart'; 
+import 'login_screen.dart'; 
 import 'log_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -36,9 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // ==========================================
-  // FITUR BARU: FUNGSI LOGOUT DENGAN KONFIRMASI
-  // ==========================================
+
   Future<void> _handleLogout() async {
     bool confirm = await showDialog(
       context: context,
@@ -57,11 +55,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ) ?? false;
 
     if (confirm) {
-      // 1. Panggil fungsi logout dari AuthService untuk membersihkan sesi Supabase & Memori
+     
       await AuthService().logout();
       
       if (mounted) {
-        // 2. Arahkan kembali ke halaman Login dan HAPUS semua riwayat halaman sebelumnya (biar gak bisa di-back)
+        
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -83,7 +81,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Dibungkus Expanded agar teks nama yang panjang tidak bikin error layar (overflow)
+        
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +112,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Hanya Admin dan POS_Barang yang butuh lihat Laporan Keuangan Revenue Card
             if (_userRole == 'Admin' || _userRole == 'POS_Barang') ...[
               const RevenueCard(),
               const SizedBox(height: 20),

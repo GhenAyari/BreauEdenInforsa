@@ -76,7 +76,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
     }
   }
 
-  // LOGIKA TAMBAH/EDIT PERTANYAAN (Sekarang support "Pilihan Ganda")
+
   void _showQuestionDialog({int? editIndex}) {
     final bool isEditMode = editIndex != null;
     final existingQ = isEditMode ? _questions[editIndex] : null;
@@ -144,12 +144,12 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       )
                     ],
 
-                    // KALAU TIPE-NYA PILIHAN (Dropdown), Munculkan kotak tambah opsi
+                 
                     if (typePilihan == 'choice') ...[
                       const SizedBox(height: 15),
                       const Text("Opsi Pilihan:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
                       
-                      // Daftar Opsi yang sudah ditambahkan
+                    
                       ...tempOptions.asMap().entries.map((entry) {
                         int idx = entry.key;
                         String opt = entry.value;
@@ -171,7 +171,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       }).toList(),
 
                       const SizedBox(height: 10),
-                      // Kotak Ketik Tambah Opsi
+                     
                       Row(
                         children: [
                           Expanded(
@@ -197,7 +197,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       )
                     ],
 
-                    // Kalau tipe-nya PERNYATAAN, munculkan kotak upload gambar
+                  
                     if (typePilihan == 'statement') ...[
                       const SizedBox(height: 15),
                       const Text("Gambar Info (Opsional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),

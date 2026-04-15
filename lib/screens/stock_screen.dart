@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // IMPORT BARU: Untuk cek Role
+import 'package:shared_preferences/shared_preferences.dart'; 
 import '../core/colors.dart';
 
 class CurrencyFormat extends TextInputFormatter {
@@ -39,7 +39,6 @@ class _StockScreenState extends State<StockScreen> {
   List<Map<String, dynamic>> _allProducts = [];
   bool _isLoading = true;
   
-  // VARIABEL BARU UNTUK CEK JABATAN
   String _userRole = "";
   bool _isRoleLoaded = false;
 
@@ -50,7 +49,6 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   Future<void> _loadRoleAndData() async {
-    // 1. Cek dulu siapa yang login
     SharedPreferences prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
@@ -59,21 +57,25 @@ class _StockScreenState extends State<StockScreen> {
       });
     }
 
-    // 2. Baru nyalakan keran data Supabase
-    _productSub = _supabase
-        .from('products')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: true)
-        .listen((data) {
+    _tarikDataBarang(); // Panggil data pertama kali
+  }
+
+ 
+  Future<void> _tarikDataBarang() async {
+    if (mounted) setState(() => _isLoading = true);
+    
+    try {
+      final data = await _supabase.from('products').select().order('created_at', ascending: true);
       if (mounted) {
         setState(() {
           _allProducts = data;
           _isLoading = false;
         });
       }
-    }, onError: (error) {
-      debugPrint("Supabase Error: $error");
-    });
+    } catch (e) {
+      debugPrint("Error tarik barang: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -157,7 +159,6 @@ class _StockScreenState extends State<StockScreen> {
     final modalController = TextEditingController(text: isEditing ? _formatInitialCurrency(product['modal']) : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
     
-    // Default lokasi: Jika dia user Penyewaan, paksa ke 'penyewaan'. Jika bukan, 'store_stand'.
     String selectedCategory = isEditing 
         ? (product['category'] ?? 'store_stand') 
         : (_userRole == 'Penyewaan' ? 'penyewaan' : 'store_stand');
@@ -225,7 +226,6 @@ class _StockScreenState extends State<StockScreen> {
                     DropdownButtonFormField<String>(
                       value: selectedCategory,
                       decoration: const InputDecoration(labelText: 'Lokasi Penyimpanan', prefixIcon: Icon(Icons.location_on_outlined)),
-                      // JIKA DIA PENYEWAAN, KUNCI PILIHAN HANYA DI PENYEWAAN SAJA
                       items: _userRole == 'Penyewaan' 
                           ? const [DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan'))]
                           : const [
@@ -328,6 +328,9 @@ class _StockScreenState extends State<StockScreen> {
                         await _supabase.from('products').insert(productData);
                       }
                       
+                   
+                      _tarikDataBarang();
+
                       if (mounted) {
                         Navigator.pop(context); Navigator.pop(context); 
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? 'Barang berhasil diubah!' : 'Barang baru ditambahkan!'), backgroundColor: AppColors.success));
@@ -364,6 +367,10 @@ class _StockScreenState extends State<StockScreen> {
           await _supabase.storage.from('product_image').remove([fileName]);
         }
         await _supabase.from('products').delete().eq('id', product['id']);
+        
+      
+        _tarikDataBarang();
+
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang berhasil dihapus'), backgroundColor: Colors.red));
       } catch (e) { print("Error hapus: $e"); }
     }
@@ -373,7 +380,6 @@ class _StockScreenState extends State<StockScreen> {
   Widget build(BuildContext context) {
     if (!_isRoleLoaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    // JIKA USER PENYEWAAN, TAB-NYA CUMA 1. JIKA ADMIN/POS, TAB-NYA 3.
     final int tabCount = _userRole == 'Penyewaan' ? 1 : 3;
 
     return DefaultTabController(
@@ -383,11 +389,21 @@ class _StockScreenState extends State<StockScreen> {
           title: const Text("Manajemen Stok"),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          actions: [
+           
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: "Refresh Daftar Stok",
+              onPressed: () {
+                _tarikDataBarang();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyegarkan stok..."), duration: Duration(seconds: 1)));
+              },
+            ),
+          ],
           bottom: TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             indicatorColor: Colors.white,
-            // TAB DINAMIS BERDASARKAN ROLE
             tabs: _userRole == 'Penyewaan'
                 ? const [Tab(text: "Penyewaan")]
                 : const [
@@ -410,17 +426,15 @@ class _StockScreenState extends State<StockScreen> {
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(icon: const Icon(Icons.clear, color: Colors.grey), onPressed: () { _searchController.clear(); setState(() { _searchQuery = ''; }); })
                       : null,
-                  filled: true, fillColor: Colors.grey[100], contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade300)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade300)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: AppColors.primary)),
+                  filled: true, fillColor: Theme.of(context).inputDecorationTheme.fillColor ?? Colors.grey[100], 
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                 ),
               ),
             ),
             
             Expanded(
               child: TabBarView(
-                // ISI TAB DINAMIS BERDASARKAN ROLE
                 children: _userRole == 'Penyewaan'
                     ? [ _buildProductList('penyewaan') ]
                     : [
