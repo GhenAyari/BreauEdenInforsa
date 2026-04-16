@@ -38,7 +38,6 @@ class _MainNavigationState extends State<MainNavigation> {
     });
   }
 
-
   void _buildNavigation() {
     // Semua Role pasti punya halaman Home
     _pages = [const DashboardScreen()];
@@ -76,6 +75,9 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
+    // FITUR BARU: Deteksi mode tema saat ini (Light / Dark)
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
@@ -83,7 +85,8 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       bottomNavigationBar: NavigationBar(
         height: 75,
-        backgroundColor: Colors.white,
+        // PERBAIKAN: Jika Dark Mode -> pakai warna tema gelap, jika Light Mode -> Putih
+        backgroundColor: isDarkMode ? Theme.of(context).scaffoldBackgroundColor : Colors.white,
         indicatorColor: AppColors.primary.withOpacity(0.15),
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
