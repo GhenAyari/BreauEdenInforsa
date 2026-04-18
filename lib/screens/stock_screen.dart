@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:flutter/foundation.dart';
 import '../core/colors.dart';
 
 class CurrencyFormat extends TextInputFormatter {
@@ -13,8 +14,20 @@ class CurrencyFormat extends TextInputFormatter {
     if (newValue.text.isEmpty) {
       return newValue.copyWith(text: '');
     }
-    final intValue = int.parse(newValue.text.replaceAll(RegExp(r'[^0-9]'), ''));
-    final newText = intValue.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+
+    String numericOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    if (numericOnly.isEmpty) {
+      return oldValue;
+    }
+
+    if (numericOnly.length > 8) {
+      return oldValue; 
+    }
+
+    int value = int.parse(numericOnly);
+    final newText = value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+
     return TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: newText.length),
@@ -57,10 +70,9 @@ class _StockScreenState extends State<StockScreen> {
       });
     }
 
-    _tarikDataBarang(); // Panggil data pertama kali
+    _tarikDataBarang(); 
   }
 
- 
   Future<void> _tarikDataBarang() async {
     if (mounted) setState(() => _isLoading = true);
     
@@ -83,6 +95,13 @@ class _StockScreenState extends State<StockScreen> {
     _productSub?.cancel(); 
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Fungsi andalan buat ngasih titik ribuan ke angka murni dari database
+  String _formatInitialCurrency(dynamic value) {
+    if (value == null) return '';
+    int val = value is int ? value : (num.tryParse(value.toString())?.toInt() ?? 0);
+    return val.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
   Widget _buildProductList(String category) {
@@ -111,13 +130,16 @@ class _StockScreenState extends State<StockScreen> {
       itemBuilder: (_, index) {
         final product = filteredProducts[index];
         
+        // ========================================================
+        // PERBAIKAN: Angka harga & modal dibungkus format ribuan
+        // ========================================================
         Widget subtitleWidget;
         if (product['category'] == 'eden') {
           subtitleWidget = Text("Stok: ${product['stock']}");
         } else if (product['category'] == 'penyewaan') {
-          subtitleWidget = Text("Stok: ${product['stock']} | Tarif: Rp ${product['price']}/hari");
+          subtitleWidget = Text("Stok: ${product['stock']} | Tarif: Rp ${_formatInitialCurrency(product['price'])}/hari");
         } else {
-          subtitleWidget = Text("Stok: ${product['stock']} | Harga: Rp ${product['price']} | Modal: Rp ${product['modal'] ?? 0}");
+          subtitleWidget = Text("Stok: ${product['stock']} | Harga: Rp ${_formatInitialCurrency(product['price'])} | Modal: Rp ${_formatInitialCurrency(product['modal'] ?? 0)}");
         }
 
         return Card(
@@ -143,12 +165,6 @@ class _StockScreenState extends State<StockScreen> {
         );
       }
     );
-  }
-
-  String _formatInitialCurrency(dynamic value) {
-    if (value == null) return '';
-    int val = value is int ? value : (num.tryParse(value.toString())?.toInt() ?? 0);
-    return val.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
   Future<void> _showFormDialog({Map<String, dynamic>? product}) async {
@@ -239,6 +255,9 @@ class _StockScreenState extends State<StockScreen> {
 
                     TextField(
                       controller: nameController,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,()&/+%]'))
+                      ],
                       decoration: InputDecoration(labelText: 'Nama Barang', prefixIcon: const Icon(Icons.inventory_2_outlined), errorText: errorName),
                       onChanged: (_) { if (errorName != null) setStateDialog(() => errorName = null); },
                     ),
@@ -247,8 +266,8 @@ class _StockScreenState extends State<StockScreen> {
                     if (selectedCategory != 'eden') ...[
                       TextField(
                         controller: priceController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyFormat()],
+                        keyboardType: kIsWeb ? TextInputType.text : TextInputType.number,
+                        inputFormatters: [CurrencyFormat()],
                         decoration: InputDecoration(
                           labelText: selectedCategory == 'penyewaan' ? 'Tarif Sewa per Hari (Rp)' : 'Harga Jual (Rp)', 
                           prefixIcon: Icon(selectedCategory == 'penyewaan' ? Icons.event_note : Icons.sell_outlined), 
@@ -261,8 +280,8 @@ class _StockScreenState extends State<StockScreen> {
                       if (selectedCategory != 'penyewaan') ...[
                         TextField(
                           controller: modalController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyFormat()],
+                          keyboardType: kIsWeb ? TextInputType.text : TextInputType.number,
+                          inputFormatters: [CurrencyFormat()],
                           decoration: InputDecoration(labelText: 'Modal Satuan (Rp)', prefixIcon: const Icon(Icons.savings_outlined), errorText: errorModal),
                           onChanged: (_) { if (errorModal != null) setStateDialog(() => errorModal = null); },
                         ),
@@ -328,7 +347,6 @@ class _StockScreenState extends State<StockScreen> {
                         await _supabase.from('products').insert(productData);
                       }
                       
-                   
                       _tarikDataBarang();
 
                       if (mounted) {
@@ -368,7 +386,6 @@ class _StockScreenState extends State<StockScreen> {
         }
         await _supabase.from('products').delete().eq('id', product['id']);
         
-      
         _tarikDataBarang();
 
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang berhasil dihapus'), backgroundColor: Colors.red));
@@ -390,7 +407,6 @@ class _StockScreenState extends State<StockScreen> {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           actions: [
-           
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: "Refresh Daftar Stok",
