@@ -27,6 +27,12 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
 
   List<Map<String, dynamic>> _questions = [];
 
+  // ==========================================
+  // FITUR BARU: Variabel Validasi Lokal
+  // ==========================================
+  String? _titleError;
+  String? _questionsError;
+
   bool get isEditing => widget.existingPo != null;
 
   @override
@@ -76,7 +82,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
     }
   }
 
-
   void _showQuestionDialog({int? editIndex}) {
     final bool isEditMode = editIndex != null;
     final existingQ = isEditMode ? _questions[editIndex] : null;
@@ -85,12 +90,10 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
     String typePilihan = isEditMode ? existingQ!['type'] : 'text'; 
     bool isRequired = isEditMode ? existingQ!['required'] : true;
     
-    // Variabel untuk Gambar Info
     Uint8List? tempStmtImageBytes;
     String? tempStmtImageExt;
     String? tempStmtImageUrl = isEditMode ? existingQ!['imageUrl'] : null;
 
-    // Variabel BARU untuk opsi Pilihan Ganda
     List<String> tempOptions = [];
     if (isEditMode && existingQ!['options'] != null) {
       tempOptions = List<String>.from(existingQ!['options']);
@@ -116,7 +119,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                         DropdownMenuItem(value: 'text', child: Text('Teks Singkat')),
                         DropdownMenuItem(value: 'number', child: Text('Angka (Jumlah/No HP)')),
                         DropdownMenuItem(value: 'file', child: Text('Upload File (Gambar/PDF)')),
-                        DropdownMenuItem(value: 'choice', child: Text('Pilihan (Dropdown)')), // OPSI BARU!
+                        DropdownMenuItem(value: 'choice', child: Text('Pilihan (Dropdown)')), 
                         DropdownMenuItem(value: 'statement', child: Text('Pernyataan (Info/Gambar)')), 
                       ],
                       onChanged: (val) => setStateDialog(() => typePilihan = val!),
@@ -133,7 +136,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       )
                     ),
                     
-                    // Kalau tipe-nya BUKAN pernyataan, muncul switch "Wajib Diisi"
                     if (typePilihan != 'statement') ...[
                       const SizedBox(height: 10),
                       SwitchListTile(
@@ -144,12 +146,10 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       )
                     ],
 
-                 
                     if (typePilihan == 'choice') ...[
                       const SizedBox(height: 15),
                       const Text("Opsi Pilihan:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
                       
-                    
                       ...tempOptions.asMap().entries.map((entry) {
                         int idx = entry.key;
                         String opt = entry.value;
@@ -171,7 +171,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       }).toList(),
 
                       const SizedBox(height: 10),
-                     
                       Row(
                         children: [
                           Expanded(
@@ -197,7 +196,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       )
                     ],
 
-                  
                     if (typePilihan == 'statement') ...[
                       const SizedBox(height: 15),
                       const Text("Gambar Info (Opsional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -243,7 +241,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                   onPressed: () {
                     if (labelController.text.isEmpty && tempStmtImageBytes == null && tempStmtImageUrl == null) return;
                     
-                    // Validasi: Kalau tipe pilihan tapi opsinya kosong, jangan mau di-save!
                     if (typePilihan == 'choice' && tempOptions.isEmpty) {
                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tambahkan minimal 1 opsi pilihan!")));
                        return;
@@ -257,7 +254,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                         "required": typePilihan == 'statement' ? false : isRequired, 
                       };
                       
-                      // Masukkan data array Opsi jika tipe Choice
                       if (typePilihan == 'choice') {
                         newItem['options'] = tempOptions;
                       }
@@ -275,6 +271,11 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                       } else {
                         _questions.add(newItem);
                       }
+
+                      // ==========================================
+                      // PERBAIKAN: Hapus error daftar item kalau sudah nambah!
+                      // ==========================================
+                      _questionsError = null;
                     });
                     Navigator.pop(context);
                   },
@@ -289,10 +290,27 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
   }
 
   Future<void> _savePOSetting() async {
-    if (_titleController.text.isEmpty || _questions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Judul PO dan minimal 1 item wajib diisi!"), backgroundColor: Colors.red));
-      return;
-    }
+    // ==========================================
+    // PERBAIKAN: Validasi Lokal tanpa SnackBar
+    // ==========================================
+    bool isValid = true;
+    setState(() {
+      if (_titleController.text.trim().isEmpty) {
+        _titleError = "Judul PO tidak boleh kosong!";
+        isValid = false;
+      } else {
+        _titleError = null;
+      }
+
+      if (_questions.isEmpty) {
+        _questionsError = "Minimal harus membuat 1 Item Form!";
+        isValid = false;
+      } else {
+        _questionsError = null;
+      }
+    });
+
+    if (!isValid) return; // Stop proses kalau ada yang kosong
 
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
@@ -385,7 +403,21 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
           children: [
             const Text("Informasi Dasar", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: "Judul PO (Misal: Jaket Himpunan)", border: OutlineInputBorder())),
+            TextField(
+              controller: _titleController, 
+              decoration: InputDecoration(
+                labelText: "Judul PO (Misal: Jaket Himpunan)", 
+                border: const OutlineInputBorder(),
+                // ==========================================
+                // PERBAIKAN: Menampilkan pesan error lokal
+                // ==========================================
+                errorText: _titleError,
+              ),
+              onChanged: (_) {
+                // Hapus pesan error saat user mulai ngetik
+                if (_titleError != null) setState(() => _titleError = null);
+              },
+            ),
             const SizedBox(height: 10),
             TextField(controller: _descController, maxLines: 3, decoration: const InputDecoration(labelText: "Deskripsi / Keterangan PO", border: OutlineInputBorder())),
             const SizedBox(height: 20),
@@ -409,6 +441,14 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                 ElevatedButton.icon(onPressed: () => _showQuestionDialog(), icon: const Icon(Icons.add), label: const Text("Tambah"), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white))
               ],
             ),
+            // ==========================================
+            // PERBAIKAN: Pesan error merah jika list item kosong
+            // ==========================================
+            if (_questionsError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(_questionsError!, style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
             const SizedBox(height: 10),
             
             if (_questions.isEmpty)
@@ -425,7 +465,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                   if (q['type'] == 'number') typeIcon = Icons.numbers;
                   if (q['type'] == 'file') typeIcon = Icons.upload_file; 
                   if (q['type'] == 'statement') typeIcon = Icons.info_outline; 
-                  if (q['type'] == 'choice') typeIcon = Icons.arrow_drop_down_circle; // Ikon Dropdown
+                  if (q['type'] == 'choice') typeIcon = Icons.arrow_drop_down_circle; 
 
                   return Card(
                     child: ListTile(
