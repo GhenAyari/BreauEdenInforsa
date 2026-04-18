@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // IMPORT BARU: Untuk modul validasi input
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
@@ -27,7 +28,6 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _tarikDataPengurus() async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      // Menggunakan .select() biasa agar tidak bergantung pada setting Realtime Supabase
       final data = await _supabase.from('pengurus').select().order('nama_lengkap', ascending: true);
       if (mounted) {
         setState(() {
@@ -41,7 +41,6 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
- 
   Future<void> _showAddUserDialog() async {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
@@ -60,11 +59,27 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))),
+                  TextField(
+                    controller: nameCtrl, 
+                    // Implementasi validasi untuk menolak emoticon pada kolom Nama
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,]'))],
+                    decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: "Email Login", prefixIcon: Icon(Icons.email))),
+                  TextField(
+                    controller: emailCtrl, 
+                    // Implementasi Regex untuk menolak karakter non-ASCII
+                    inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[^\x00-\x7F]'))],
+                    decoration: const InputDecoration(labelText: "Email Login", prefixIcon: Icon(Icons.email))
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Password (Min. 6 Karakter)", prefixIcon: Icon(Icons.lock))),
+                  TextField(
+                    controller: passCtrl, 
+                    obscureText: true, 
+                    // Implementasi Regex untuk menolak karakter non-ASCII
+                    inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[^\x00-\x7F]'))],
+                    decoration: const InputDecoration(labelText: "Password (Min. 6 Karakter)", prefixIcon: Icon(Icons.lock))
+                  ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
                     value: selectedRole,
@@ -90,16 +105,13 @@ class _AccountScreenState extends State<AccountScreen> {
                   setDialogState(() => isLoading = true);
 
                   try {
-               
                     final url = dotenv.env['SUPABASE_URL'] ?? 'https://lukiszwznteofbswbdbo.supabase.co';
                     final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
                     
                     if (serviceKey.isEmpty) throw "Kunci SUPABASE_SERVICE_KEY belum dipasang di .env!";
 
-            
                     final adminClient = SupabaseClient(url, serviceKey);
 
-               
                     final userRes = await adminClient.auth.admin.createUser(
                       AdminUserAttributes(
                         email: emailCtrl.text.trim(),
@@ -109,7 +121,6 @@ class _AccountScreenState extends State<AccountScreen> {
                     );
 
                     if (userRes.user != null) {
-                      // 2. Simpan profilnya ke tabel 'pengurus'
                       await _supabase.from('pengurus').insert({
                         'id': userRes.user!.id,
                         'nama_lengkap': nameCtrl.text.trim(),
@@ -118,7 +129,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       });
                     }
 
-                    _tarikDataPengurus(); // <--- REFRESH PAKSA SETELAH NAMBAH DATA
+                    _tarikDataPengurus(); 
 
                     if (mounted) {
                       Navigator.pop(context);
@@ -155,7 +166,12 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))),
+                  TextField(
+                    controller: nameCtrl, 
+                    // Implementasi validasi untuk menolak emoticon
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,]'))],
+                    decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))
+                  ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
                     value: selectedRole,
@@ -188,7 +204,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       'status': selectedStatus,
                     }).eq('id', user['id']);
 
-                    _tarikDataPengurus(); // <--- REFRESH PAKSA SETELAH UPDATE DATA
+                    _tarikDataPengurus(); 
 
                     if (mounted) {
                       Navigator.pop(context);
@@ -219,7 +235,6 @@ class _AccountScreenState extends State<AccountScreen> {
       body: Column(
         children: [
           
-          // SAKLAR DARK MODE
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: ValueListenableBuilder<ThemeMode>(
@@ -256,7 +271,6 @@ class _AccountScreenState extends State<AccountScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text("Daftar Pengurus (Admin)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                // Tombol Refresh Kecil Buat Jaga-Jaga
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.grey, size: 20),
                   onPressed: _tarikDataPengurus,
@@ -268,7 +282,6 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ),
 
-          // DAFTAR PENGURUS
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator())
