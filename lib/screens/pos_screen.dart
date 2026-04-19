@@ -8,6 +8,10 @@ import '../core/colors.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+// ========================================================
+// 1. IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -34,10 +38,11 @@ class _PosScreenState extends State<PosScreen> {
   void initState() {
     super.initState();
     _checkActiveSession();
-    _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'store_stand').order('name');
+    // ========================================================
+    // PERBAIKAN: Hanya menarik data kategori 'stand' saja
+    // ========================================================
+    _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'stand').order('name');
   }
-
-
 
   Future<void> _checkActiveSession() async {
     try {
@@ -65,6 +70,11 @@ class _PosScreenState extends State<PosScreen> {
         'modal_awal': 0  
       }).select('id').single();
 
+      // ========================================================
+      // MANGGIL AGEN LOG UNTUK MENCATAT BUKA SESI
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'sessions', aksi: 'TAMBAH');
+
       if (mounted) {
         setState(() {
           _isSessionOpen = true;
@@ -91,6 +101,11 @@ class _PosScreenState extends State<PosScreen> {
         'closed_at': DateTime.now().toIso8601String(),
       }).eq('id', _currentSessionId!);
 
+      // ========================================================
+      // MANGGIL AGEN LOG UNTUK MENCATAT TUTUP SESI
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
+
       if (mounted) {
         setState(() {
           _isSessionOpen = false;
@@ -115,6 +130,11 @@ class _PosScreenState extends State<PosScreen> {
         'status': 'paused',
       }).eq('id', _currentSessionId!);
 
+      // ========================================================
+      // MANGGIL AGEN LOG UNTUK MENCATAT JEDA SESI
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
+
       if (mounted) {
         setState(() {
           _isSessionOpen = false;
@@ -138,6 +158,11 @@ class _PosScreenState extends State<PosScreen> {
       await _supabase.from('sessions').update({
         'status': 'open'
       }).eq('id', session['id']);
+
+      // ========================================================
+      // MANGGIL AGEN LOG UNTUK MENCATAT LANJUTKAN SESI
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
         setState(() {
@@ -178,6 +203,11 @@ class _PosScreenState extends State<PosScreen> {
       try {
         await _supabase.from('sessions').delete().eq('id', sessionId);
         
+        // ========================================================
+        // MANGGIL AGEN LOG UNTUK MENCATAT HAPUS SESI
+        // ========================================================
+        await LogService.catatAktivitas(modul: 'sessions', aksi: 'HAPUS');
+
         if (mounted) {
           Navigator.pop(context); 
           Navigator.pop(context); 
@@ -229,6 +259,11 @@ class _PosScreenState extends State<PosScreen> {
         final newStock = item['stock'] - item['qty'];
         await _supabase.from('products').update({'stock': newStock}).eq('id', item['id']);
       }
+
+      // ========================================================
+      // MANGGIL AGEN LOG UNTUK MENCATAT TRANSAKSI BARU
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'transactions', aksi: 'TAMBAH');
 
       if (mounted) {
         Navigator.pop(context); 
@@ -346,8 +381,6 @@ class _PosScreenState extends State<PosScreen> {
     });
   }
 
-
-
   void _showOpenSessionDialog() {
     final operatorController = TextEditingController();
     final standNameController = TextEditingController(); 
@@ -368,29 +401,25 @@ class _PosScreenState extends State<PosScreen> {
                 children: [
                   TextField(
                     controller: standNameController, 
-                    // Bebas huruf, angka (integer), atau desimal (float)
                     decoration: InputDecoration(
                       labelText: "Keterangan/Nama Stand", 
                       prefixIcon: const Icon(Icons.storefront),
-                      errorText: errorStandName, // Muncul pesan error merah di sini
+                      errorText: errorStandName, 
                     ),
                     onChanged: (value) {
-                      // Hilangkan error otomatis saat user mulai mengetik
                       if (errorStandName != null) setStateDialog(() => errorStandName = null);
                     },
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: operatorController, 
-                    // FILTER KHUSUS: Hanya izinkan huruf (A-Z, a-z) dan spasi. Angka ditolak!
                     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]'))],
                     decoration: InputDecoration(
                       labelText: "Nama Penjaga Shift", 
                       prefixIcon: const Icon(Icons.person),
-                      errorText: errorOperator, // Muncul pesan error merah di sini
+                      errorText: errorOperator, 
                     ),
                     onChanged: (value) {
-                      // Hilangkan error otomatis saat user mulai mengetik
                       if (errorOperator != null) setStateDialog(() => errorOperator = null);
                     },
                   ),
@@ -403,7 +432,6 @@ class _PosScreenState extends State<PosScreen> {
                   onPressed: () {
                     bool isValid = true;
 
-                    // Validasi: Cek apakah kosong
                     setStateDialog(() {
                       if (standNameController.text.trim().isEmpty) {
                         errorStandName = "Keterangan stand wajib diisi!";
@@ -420,7 +448,6 @@ class _PosScreenState extends State<PosScreen> {
                       }
                     });
 
-                    // Jika semua aman, baru proses buka stand
                     if (isValid) {
                       _openSession(operatorController.text.trim(), standNameController.text.trim());
                     }

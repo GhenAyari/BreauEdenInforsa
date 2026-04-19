@@ -127,7 +127,9 @@ class _RevenueCardState extends State<RevenueCard> {
   void _showDetails() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+      ),
       builder: (context) {
         return Padding(
           padding: const EdgeInsets.all(24.0),
@@ -135,14 +137,20 @@ class _RevenueCardState extends State<RevenueCard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Rincian Pendapatan", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Text(
+                "Rincian Pendapatan", 
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+              ),
               const SizedBox(height: 20),
 
-              _buildDetailRow("POS (Pendapatan Kotor)", _posKotor),
-              _buildDetailRow("POS (Keuntungan Bersih)", _posBersih, isNet: true),
+              // ========================================================
+              // PERBAIKAN: Penambahan Label Inforsa Stand & Store di Rincian
+              // ========================================================
+              _buildDetailRow("POS (Inforsa Stand - Kotor)", _posKotor),
+              _buildDetailRow("POS (Inforsa Stand - Bersih)", _posBersih, isNet: true),
               const SizedBox(height: 10),
 
-              _buildDetailRow("Penyewaan (Total)", _sewaTotal),
+              _buildDetailRow("Penyewaan (Inforsa Store)", _sewaTotal),
 
               const Divider(height: 30, thickness: 1.5),
 
@@ -162,20 +170,29 @@ class _RevenueCardState extends State<RevenueCard> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: isNet ? Colors.green[700] : Colors.black87)),
+          Text(
+            label, 
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal, 
+              color: isNet ? Colors.green[700] : Colors.black87
+            )
+          ),
           Text(
             _isObscured ? "Rp •••••••" : "Rp ${_formatCurrency(amount)}",
-            style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: isNet ? Colors.green[700] : Colors.black87)
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600, 
+              color: isNet ? Colors.green[700] : Colors.black87
+            )
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    int totalPendapatanKotor = _posKotor + _sewaTotal;
-
+  // ========================================================
+  // KARTU UTAMA: GRAND TOTAL (Bisa diklik & ada tombol mata)
+  // ========================================================
+  Widget _buildGrandTotalCard(int totalPendapatanKotor) {
     return Card(
       elevation: 2,
       margin: EdgeInsets.zero,
@@ -191,9 +208,12 @@ class _RevenueCardState extends State<RevenueCard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("TOTAL PENDAPATAN", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+                  const Text(
+                    "GRAND TOTAL PENDAPATAN", 
+                    style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)
+                  ),
                   GestureDetector(
-                    onTap: _toggleObscure, // Pakai fungsi baru yang ada save-nya
+                    onTap: _toggleObscure, 
                     child: Icon(
                       _isObscured ? Icons.visibility_off : Icons.visibility,
                       color: Colors.grey,
@@ -208,7 +228,11 @@ class _RevenueCardState extends State<RevenueCard> {
                   ? const SizedBox(height: 38, width: 38, child: CircularProgressIndicator())
                   : Text(
                       _isObscured ? "Rp ••••••••" : "Rp ${_formatCurrency(totalPendapatanKotor)}",
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+                      style: TextStyle(
+                        fontSize: 32, 
+                        fontWeight: FontWeight.bold, 
+                        color: Theme.of(context).primaryColor
+                      ),
                     ),
 
               const SizedBox(height: 8),
@@ -216,15 +240,104 @@ class _RevenueCardState extends State<RevenueCard> {
                 children: [
                   Icon(Icons.account_balance_wallet, size: 16, color: Colors.green[700]),
                   const SizedBox(width: 4),
-                  Text("Dari POS & Sewa", style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12)),
+                  Text(
+                    "Dari Inforsa Store & Stand", 
+                    style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12)
+                  ),
                   const Spacer(),
-                  const Text("Klik lihat rincian 👉", style: TextStyle(color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic)),
+                  const Text(
+                    "Klik lihat rincian 👉", 
+                    style: TextStyle(color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic)
+                  ),
                 ],
               )
             ],
           ),
         ),
       ),
+    );
+  }
+
+  // ========================================================
+  // KARTU KECIL: INFORSA STORE / INFORSA STAND (Tidak bisa diklik)
+  // ========================================================
+  Widget _buildSubRevenueCard(String title, int amount, IconData icon, Color iconColor) {
+    return Card(
+      elevation: 1,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: iconColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title, 
+                    style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _isLoading
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(
+                    _isObscured ? "Rp •••••" : "Rp ${_formatCurrency(amount)}",
+                    style: const TextStyle(
+                      fontSize: 16, 
+                      fontWeight: FontWeight.bold, 
+                      color: Colors.black87
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    int totalPendapatanKotor = _posKotor + _sewaTotal;
+
+    return Column(
+      children: [
+        // 1. KARTU GRAND TOTAL (Paling Atas)
+        _buildGrandTotalCard(totalPendapatanKotor),
+        
+        const SizedBox(height: 12),
+        
+        // 2. KARTU INFORSA STORE & STAND (Berjejer di bawah)
+        Row(
+          children: [
+            Expanded(
+              child: _buildSubRevenueCard(
+                "Inforsa Store (Sewa)", 
+                _sewaTotal, 
+                Icons.shopping_bag, 
+                Colors.blue
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildSubRevenueCard(
+                "Inforsa Stand (POS)", 
+                _posKotor, 
+                Icons.storefront, 
+                Colors.orange
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

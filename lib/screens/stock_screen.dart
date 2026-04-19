@@ -7,37 +7,26 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import 'package:flutter/foundation.dart';
 import '../core/colors.dart';
+// ========================================================
+// 1. IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class CurrencyFormat extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.isEmpty) {
-      return newValue.copyWith(text: '');
-    }
-
+    if (newValue.text.isEmpty) return newValue.copyWith(text: '');
     String numericOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    
-    if (numericOnly.isEmpty) {
-      return oldValue;
-    }
-
-    if (numericOnly.length > 8) {
-      return oldValue; 
-    }
-
+    if (numericOnly.isEmpty) return oldValue;
+    if (numericOnly.length > 8) return oldValue; 
     int value = int.parse(numericOnly);
     final newText = value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
-
-    return TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newText.length),
-    );
+    return TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: newText.length));
   }
 }
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
-
   @override
   State<StockScreen> createState() => _StockScreenState();
 }
@@ -69,21 +58,14 @@ class _StockScreenState extends State<StockScreen> {
         _isRoleLoaded = true;
       });
     }
-
     _tarikDataBarang(); 
   }
 
   Future<void> _tarikDataBarang() async {
     if (mounted) setState(() => _isLoading = true);
-    
     try {
       final data = await _supabase.from('products').select().order('created_at', ascending: true);
-      if (mounted) {
-        setState(() {
-          _allProducts = data;
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _allProducts = data; _isLoading = false; });
     } catch (e) {
       debugPrint("Error tarik barang: $e");
       if (mounted) setState(() => _isLoading = false);
@@ -97,7 +79,6 @@ class _StockScreenState extends State<StockScreen> {
     super.dispose();
   }
 
-  // Fungsi andalan buat ngasih titik ribuan ke angka murni dari database
   String _formatInitialCurrency(dynamic value) {
     if (value == null) return '';
     int val = value is int ? value : (num.tryParse(value.toString())?.toInt() ?? 0);
@@ -105,34 +86,23 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   Widget _buildProductList(String category) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     final categoryProducts = _allProducts.where((p) => p['category'] == category).toList();
-
-    if (categoryProducts.isEmpty) {
-      return const Center(child: Text('Belum ada data barang di kategori ini.'));
-    }
+    if (categoryProducts.isEmpty) return const Center(child: Text('Belum ada data barang di kategori ini.'));
 
     final filteredProducts = categoryProducts.where((product) {
       final productName = product['name'].toString().toLowerCase();
       return productName.contains(_searchQuery.toLowerCase());
     }).toList();
 
-    if (filteredProducts.isEmpty) {
-      return const Center(child: Text('Tidak ada barang yang cocok dengan pencarian.', style: TextStyle(color: Colors.grey)));
-    }
+    if (filteredProducts.isEmpty) return const Center(child: Text('Tidak ada barang yang cocok dengan pencarian.', style: TextStyle(color: Colors.grey)));
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: filteredProducts.length,
       itemBuilder: (_, index) {
         final product = filteredProducts[index];
-        
-        // ========================================================
-        // PERBAIKAN: Angka harga & modal dibungkus format ribuan
-        // ========================================================
         Widget subtitleWidget;
         if (product['category'] == 'eden') {
           subtitleWidget = Text("Stok: ${product['stock']}");
@@ -147,8 +117,7 @@ class _StockScreenState extends State<StockScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           child: ListTile(
             leading: CircleAvatar(
-              radius: 25,
-              backgroundColor: Colors.grey[200],
+              radius: 25, backgroundColor: Colors.grey[200],
               backgroundImage: product['image_url'] != null ? NetworkImage(product['image_url']) : null,
               child: product['image_url'] == null ? const Icon(Icons.inventory_2, color: Colors.grey) : null,
             ),
@@ -169,16 +138,12 @@ class _StockScreenState extends State<StockScreen> {
 
   Future<void> _showFormDialog({Map<String, dynamic>? product}) async {
     final isEditing = product != null; 
-    
     final nameController = TextEditingController(text: isEditing ? product['name'] : '');
     final priceController = TextEditingController(text: isEditing ? _formatInitialCurrency(product['price']) : '');
     final modalController = TextEditingController(text: isEditing ? _formatInitialCurrency(product['modal']) : '');
     final stockController = TextEditingController(text: isEditing ? product['stock'].toString() : '');
     
-    String selectedCategory = isEditing 
-        ? (product['category'] ?? 'store_stand') 
-        : (_userRole == 'Penyewaan' ? 'penyewaan' : 'store_stand');
-    
+    String selectedCategory = isEditing ? (product['category'] ?? 'store') : (_userRole == 'Penyewaan' ? 'penyewaan' : 'store');
     Uint8List? selectedImageBytes;
     String? currentImageUrl = isEditing ? product['image_url'] : null;
     String? imageExtension;
@@ -187,23 +152,15 @@ class _StockScreenState extends State<StockScreen> {
       context: context,
       barrierDismissible: false, 
       builder: (context) {
-        String? errorName;
-        String? errorPrice;
-        String? errorModal;
-        String? errorStock;
+        String? errorName, errorPrice, errorModal, errorStock;
 
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            
             Future<void> pickImage(ImageSource source) async {
               final XFile? image = await _picker.pickImage(source: source);
               if (image != null) {
                 final bytes = await image.readAsBytes(); 
-                setStateDialog(() {
-                  selectedImageBytes = bytes;
-                  currentImageUrl = null; 
-                  imageExtension = image.name.split('.').last; 
-                });
+                setStateDialog(() { selectedImageBytes = bytes; currentImageUrl = null; imageExtension = image.name.split('.').last; });
               }
             }
 
@@ -215,17 +172,10 @@ class _StockScreenState extends State<StockScreen> {
                   children: [
                     GestureDetector(
                       onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (_) => SafeArea(
-                            child: Wrap(
-                              children: [
-                                ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () { Navigator.pop(context); pickImage(ImageSource.gallery); }),
-                                ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () { Navigator.pop(context); pickImage(ImageSource.camera); }),
-                              ],
-                            ),
-                          ),
-                        );
+                        showModalBottomSheet(context: context, builder: (_) => SafeArea(child: Wrap(children: [
+                          ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () { Navigator.pop(context); pickImage(ImageSource.gallery); }),
+                          ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () { Navigator.pop(context); pickImage(ImageSource.camera); }),
+                        ])));
                       },
                       child: Container(
                         height: 120, width: 120,
@@ -240,24 +190,18 @@ class _StockScreenState extends State<StockScreen> {
                     const SizedBox(height: 20),
 
                     DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Lokasi Penyimpanan', prefixIcon: Icon(Icons.location_on_outlined)),
-                      items: _userRole == 'Penyewaan' 
-                          ? const [DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan'))]
-                          : const [
-                              DropdownMenuItem(value: 'store_stand', child: Text('Store & Stand')),
-                              DropdownMenuItem(value: 'eden', child: Text('Eden (Gudang)')),
-                              DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan')), 
-                            ],
+                      value: selectedCategory, decoration: const InputDecoration(labelText: 'Lokasi Penyimpanan', prefixIcon: Icon(Icons.location_on_outlined)),
+                      items: _userRole == 'Penyewaan' ? const [DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan'))] : const [
+                        DropdownMenuItem(value: 'store', child: Text('Store (Pusat)')), DropdownMenuItem(value: 'stand', child: Text('Stand (Jualan)')),
+                        DropdownMenuItem(value: 'eden', child: Text('Eden (Gudang)')), DropdownMenuItem(value: 'penyewaan', child: Text('Penyewaan')), 
+                      ],
                       onChanged: (val) { setStateDialog(() { selectedCategory = val!; errorPrice = null; errorModal = null; }); },
                     ),
                     const SizedBox(height: 10),
 
                     TextField(
                       controller: nameController,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,()&/+%]'))
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,()&/+%]'))],
                       decoration: InputDecoration(labelText: 'Nama Barang', prefixIcon: const Icon(Icons.inventory_2_outlined), errorText: errorName),
                       onChanged: (_) { if (errorName != null) setStateDialog(() => errorName = null); },
                     ),
@@ -265,23 +209,14 @@ class _StockScreenState extends State<StockScreen> {
                     
                     if (selectedCategory != 'eden') ...[
                       TextField(
-                        controller: priceController,
-                        keyboardType: kIsWeb ? TextInputType.text : TextInputType.number,
-                        inputFormatters: [CurrencyFormat()],
-                        decoration: InputDecoration(
-                          labelText: selectedCategory == 'penyewaan' ? 'Tarif Sewa per Hari (Rp)' : 'Harga Jual (Rp)', 
-                          prefixIcon: Icon(selectedCategory == 'penyewaan' ? Icons.event_note : Icons.sell_outlined), 
-                          errorText: errorPrice
-                        ),
+                        controller: priceController, keyboardType: kIsWeb ? TextInputType.text : TextInputType.number, inputFormatters: [CurrencyFormat()],
+                        decoration: InputDecoration(labelText: selectedCategory == 'penyewaan' ? 'Tarif Sewa per Hari (Rp)' : 'Harga Jual (Rp)', prefixIcon: Icon(selectedCategory == 'penyewaan' ? Icons.event_note : Icons.sell_outlined), errorText: errorPrice),
                         onChanged: (_) { if (errorPrice != null) setStateDialog(() => errorPrice = null); },
                       ),
                       const SizedBox(height: 10),
-                      
                       if (selectedCategory != 'penyewaan') ...[
                         TextField(
-                          controller: modalController,
-                          keyboardType: kIsWeb ? TextInputType.text : TextInputType.number,
-                          inputFormatters: [CurrencyFormat()],
+                          controller: modalController, keyboardType: kIsWeb ? TextInputType.text : TextInputType.number, inputFormatters: [CurrencyFormat()],
                           decoration: InputDecoration(labelText: 'Modal Satuan (Rp)', prefixIcon: const Icon(Icons.savings_outlined), errorText: errorModal),
                           onChanged: (_) { if (errorModal != null) setStateDialog(() => errorModal = null); },
                         ),
@@ -290,9 +225,7 @@ class _StockScreenState extends State<StockScreen> {
                     ],
 
                     TextField(
-                      controller: stockController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
+                      controller: stockController, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], 
                       decoration: InputDecoration(labelText: 'Jumlah Stok', prefixIcon: const Icon(Icons.numbers), errorText: errorStock),
                       onChanged: (_) { if (errorStock != null) setStateDialog(() => errorStock = null); },
                     ),
@@ -309,9 +242,7 @@ class _StockScreenState extends State<StockScreen> {
                       if (nameController.text.trim().isEmpty) { errorName = "Nama tidak boleh kosong!"; isValid = false; }
                       if (selectedCategory != 'eden') {
                         if (priceController.text.trim().isEmpty) { errorPrice = "Harga/Tarif wajib diisi!"; isValid = false; }
-                        if (selectedCategory != 'penyewaan') {
-                          if (modalController.text.trim().isEmpty) { errorModal = "Modal wajib diisi!"; isValid = false; }
-                        }
+                        if (selectedCategory != 'penyewaan') { if (modalController.text.trim().isEmpty) { errorModal = "Modal wajib diisi!"; isValid = false; } }
                       }
                       if (stockController.text.trim().isEmpty) { errorStock = "Stok wajib diisi!"; isValid = false; }
                     });
@@ -343,8 +274,16 @@ class _StockScreenState extends State<StockScreen> {
 
                       if (isEditing) {
                         await _supabase.from('products').update(productData).eq('id', product['id']);
+                        // ========================================================
+                        // 2. MANGGIL AGEN LOG UNTUK MENCATAT EDIT/UBAH
+                        // ========================================================
+                        await LogService.catatAktivitas(modul: 'products', aksi: 'UBAH');
                       } else {
                         await _supabase.from('products').insert(productData);
+                        // ========================================================
+                        // 3. MANGGIL AGEN LOG UNTUK MENCATAT TAMBAH
+                        // ========================================================
+                        await LogService.catatAktivitas(modul: 'products', aksi: 'TAMBAH');
                       }
                       
                       _tarikDataBarang();
@@ -386,6 +325,11 @@ class _StockScreenState extends State<StockScreen> {
         }
         await _supabase.from('products').delete().eq('id', product['id']);
         
+        // ========================================================
+        // 4. MANGGIL AGEN LOG UNTUK MENCATAT HAPUS
+        // ========================================================
+        await LogService.catatAktivitas(modul: 'products', aksi: 'HAPUS');
+
         _tarikDataBarang();
 
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang berhasil dihapus'), backgroundColor: Colors.red));
@@ -397,7 +341,7 @@ class _StockScreenState extends State<StockScreen> {
   Widget build(BuildContext context) {
     if (!_isRoleLoaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    final int tabCount = _userRole == 'Penyewaan' ? 1 : 3;
+    final int tabCount = _userRole == 'Penyewaan' ? 1 : 4;
 
     return DefaultTabController(
       length: tabCount, 
@@ -410,23 +354,15 @@ class _StockScreenState extends State<StockScreen> {
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: "Refresh Daftar Stok",
-              onPressed: () {
-                _tarikDataBarang();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyegarkan stok..."), duration: Duration(seconds: 1)));
-              },
+              onPressed: () { _tarikDataBarang(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyegarkan stok..."), duration: Duration(seconds: 1))); },
             ),
           ],
           bottom: TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            tabs: _userRole == 'Penyewaan'
-                ? const [Tab(text: "Penyewaan")]
-                : const [
-                    Tab(text: "Store & Stand"),
-                    Tab(text: "Eden"),
-                    Tab(text: "Penyewaan"),
-                  ],
+            labelColor: Colors.white, unselectedLabelColor: Colors.white70, indicatorColor: Colors.white,
+            isScrollable: _userRole != 'Penyewaan', 
+            tabs: _userRole == 'Penyewaan' ? const [Tab(text: "Penyewaan")] : const [
+              Tab(text: "Store"), Tab(text: "Stand"), Tab(text: "Eden"), Tab(text: "Penyewaan"),
+            ],
           ),
         ),
         body: Column(
@@ -434,37 +370,26 @@ class _StockScreenState extends State<StockScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: TextField(
-                controller: _searchController,
-                onChanged: (value) { setState(() { _searchQuery = value; }); },
+                controller: _searchController, onChanged: (value) { setState(() { _searchQuery = value; }); },
                 decoration: InputDecoration(
-                  hintText: "Cari nama barang...",
-                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(icon: const Icon(Icons.clear, color: Colors.grey), onPressed: () { _searchController.clear(); setState(() { _searchQuery = ''; }); })
-                      : null,
-                  filled: true, fillColor: Theme.of(context).inputDecorationTheme.fillColor ?? Colors.grey[100], 
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  hintText: "Cari nama barang...", prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, color: Colors.grey), onPressed: () { _searchController.clear(); setState(() { _searchQuery = ''; }); }) : null,
+                  filled: true, fillColor: Theme.of(context).inputDecorationTheme.fillColor ?? Colors.grey[100], contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                 ),
               ),
             ),
-            
             Expanded(
               child: TabBarView(
-                children: _userRole == 'Penyewaan'
-                    ? [ _buildProductList('penyewaan') ]
-                    : [
-                        _buildProductList('store_stand'), 
-                        _buildProductList('eden'),    
-                        _buildProductList('penyewaan'),   
-                      ],
+                children: _userRole == 'Penyewaan' ? [ _buildProductList('penyewaan') ] : [
+                  _buildProductList('store'), _buildProductList('stand'), _buildProductList('eden'), _buildProductList('penyewaan'),   
+                ],
               ),
             ),
           ],
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () => _showFormDialog(), 
-          backgroundColor: AppColors.primary,
+          onPressed: () => _showFormDialog(), backgroundColor: AppColors.primary,
           child: const Icon(Icons.add, color: Colors.white),
         ),
       ),

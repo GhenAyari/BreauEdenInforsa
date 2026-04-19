@@ -23,16 +23,15 @@ class _LogScreenState extends State<LogScreen> {
         .order('waktu', ascending: false);
   }
 
- 
   String _formatDateTime(String isoString) {
+    if (isoString.isEmpty) return "-";
     DateTime dt = DateTime.parse(isoString).toLocal();
     return "${dt.day}/${dt.month}/${dt.year} - ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
- 
   Icon _getAksiIcon(String aksi) {
     if (aksi == 'TAMBAH') return const Icon(Icons.add_circle, color: Colors.green);
-    if (aksi == 'UBAH') return const Icon(Icons.edit, color: Colors.orange);
+    if (aksi == 'UBAH' || aksi == 'EDIT') return const Icon(Icons.edit, color: Colors.orange);
     if (aksi == 'HAPUS') return const Icon(Icons.delete, color: Colors.red);
     return const Icon(Icons.info, color: Colors.blue);
   }
@@ -74,20 +73,46 @@ class _LogScreenState extends State<LogScreen> {
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   leading: CircleAvatar(
-                    backgroundColor: Colors.white,
+                    backgroundColor: Colors.grey.shade100,
                     child: _getAksiIcon(log['aksi'] ?? ''),
                   ),
                   title: Text(
-                    "${log['nama_user']} (${log['divisi_user']})", 
+                    "${log['nama_user'] ?? 'Tidak Diketahui'} (${log['divisi_user'] ?? '-'})", 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text("Melakukan ${log['aksi']} pada modul '${log['modul']}'", style: const TextStyle(color: Colors.black87)),
+                      const SizedBox(height: 6),
+                      
+                      // =====================================
+                      // TAMPILAN BARU: LOG NAMA PERANGKAT
+                      // =====================================
+                      Row(
+                        children: [
+                          const Icon(Icons.devices, size: 14, color: Colors.blueGrey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              log['nama_perangkat'] ?? 'Perangkat Lama (Supabase)', 
+                              style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 4),
-                      Text(_formatDateTime(log['waktu']), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(_formatDateTime(log['waktu'] ?? ''), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
                     ],
                   ),
                   isThreeLine: true,

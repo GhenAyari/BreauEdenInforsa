@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // IMPORT BARU: Untuk modul validasi input
+import 'package:flutter/services.dart'; 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import '../main.dart'; 
 import '../core/colors.dart';
+// ========================================================
+// IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -61,14 +65,12 @@ class _AccountScreenState extends State<AccountScreen> {
                 children: [
                   TextField(
                     controller: nameCtrl, 
-                    // Implementasi validasi untuk menolak emoticon pada kolom Nama
                     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,]'))],
                     decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: emailCtrl, 
-                    // Implementasi Regex untuk menolak karakter non-ASCII
                     inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[^\x00-\x7F]'))],
                     decoration: const InputDecoration(labelText: "Email Login", prefixIcon: Icon(Icons.email))
                   ),
@@ -76,7 +78,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   TextField(
                     controller: passCtrl, 
                     obscureText: true, 
-                    // Implementasi Regex untuk menolak karakter non-ASCII
                     inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[^\x00-\x7F]'))],
                     decoration: const InputDecoration(labelText: "Password (Min. 6 Karakter)", prefixIcon: Icon(Icons.lock))
                   ),
@@ -101,6 +102,27 @@ class _AccountScreenState extends State<AccountScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Data belum lengkap / Password kurang dari 6!")));
                     return;
                   }
+
+                  // ========================================================
+                  // FITUR BARU: POPUP KONFIRMASI TAMBAH PENGURUS
+                  // ========================================================
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text("Simpan Pengurus?", style: TextStyle(fontWeight: FontWeight.bold)),
+                      content: const Text("Yakin ingin menambahkan akun pengurus baru ini?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text("Ya, Simpan")
+                        ),
+                      ],
+                    )
+                  ) ?? false;
+
+                  if (!confirm) return; // Batal simpan kalau pencet cancel atau sembarang tempat
 
                   setDialogState(() => isLoading = true);
 
@@ -127,6 +149,9 @@ class _AccountScreenState extends State<AccountScreen> {
                         'divisi_akses': selectedRole,
                         'status': 'Aktif'
                       });
+                      
+                      // MANGGIL AGEN LOG UNTUK MENCATAT PENAMBAHAN PENGURUS
+                      await LogService.catatAktivitas(modul: 'pengurus', aksi: 'TAMBAH');
                     }
 
                     _tarikDataPengurus(); 
@@ -168,7 +193,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 children: [
                   TextField(
                     controller: nameCtrl, 
-                    // Implementasi validasi untuk menolak emoticon
                     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s\-_.,]'))],
                     decoration: const InputDecoration(labelText: "Nama Lengkap", prefixIcon: Icon(Icons.person))
                   ),
@@ -195,6 +219,28 @@ class _AccountScreenState extends State<AccountScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                 onPressed: isLoading ? null : () async {
                   if (nameCtrl.text.isEmpty) return;
+
+                  // ========================================================
+                  // FITUR BARU: POPUP KONFIRMASI UPDATE PENGURUS
+                  // ========================================================
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text("Update Pengurus?", style: TextStyle(fontWeight: FontWeight.bold)),
+                      content: const Text("Yakin ingin menyimpan perubahan data pengurus ini?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text("Ya, Update")
+                        ),
+                      ],
+                    )
+                  ) ?? false;
+
+                  if (!confirm) return; // Batal update kalau pencet cancel
+
                   setDialogState(() => isLoading = true);
 
                   try {
@@ -203,6 +249,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       'divisi_akses': selectedRole,
                       'status': selectedStatus,
                     }).eq('id', user['id']);
+
+                    // MANGGIL AGEN LOG UNTUK MENCATAT UPDATE PENGURUS
+                    await LogService.catatAktivitas(modul: 'pengurus', aksi: 'UBAH');
 
                     _tarikDataPengurus(); 
 

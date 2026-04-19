@@ -5,6 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/colors.dart'; 
 import 'package:flutter/services.dart'; 
+// ========================================================
+// IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class PreorderAdminScreen extends StatefulWidget {
   final Map<String, dynamic>? existingPo; 
@@ -27,9 +31,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
 
   List<Map<String, dynamic>> _questions = [];
 
-  // ==========================================
-  // FITUR BARU: Variabel Validasi Lokal
-  // ==========================================
   String? _titleError;
   String? _questionsError;
 
@@ -272,9 +273,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                         _questions.add(newItem);
                       }
 
-                      // ==========================================
-                      // PERBAIKAN: Hapus error daftar item kalau sudah nambah!
-                      // ==========================================
                       _questionsError = null;
                     });
                     Navigator.pop(context);
@@ -290,9 +288,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
   }
 
   Future<void> _savePOSetting() async {
-    // ==========================================
-    // PERBAIKAN: Validasi Lokal tanpa SnackBar
-    // ==========================================
     bool isValid = true;
     setState(() {
       if (_titleController.text.trim().isEmpty) {
@@ -310,7 +305,30 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
       }
     });
 
-    if (!isValid) return; // Stop proses kalau ada yang kosong
+    if (!isValid) return; 
+
+    // ========================================================
+    // FITUR BARU: Popup Konfirmasi Saat Menyimpan Editan
+    // ========================================================
+    if (isEditing) {
+      bool confirm = await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Simpan Perubahan?", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text("Yakin ingin menyimpan perubahan pada form PO ini? Pastikan semua data sudah benar."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Ya, Simpan")
+            ),
+          ],
+        )
+      ) ?? false;
+
+      if (!confirm) return; // Batal simpan kalau pencet cancel
+    }
 
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
@@ -345,6 +363,12 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
 
       if (isEditing) {
         await _supabase.from('po_settings').update(poData).eq('id', widget.existingPo!['id']);
+        
+        // ========================================================
+        // CATAT LOG PERUBAHAN PO SETTING
+        // ========================================================
+        await LogService.catatAktivitas(modul: 'po_settings', aksi: 'UBAH');
+
         if (mounted) {
           Navigator.pop(context); 
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Perubahan Form Berhasil Disimpan!"), backgroundColor: Colors.green));
@@ -352,6 +376,12 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
         }
       } else {
         final response = await _supabase.from('po_settings').insert(poData).select().single();
+        
+        // ========================================================
+        // CATAT LOG PENAMBAHAN PO SETTING
+        // ========================================================
+        await LogService.catatAktivitas(modul: 'po_settings', aksi: 'TAMBAH');
+
         final String newId = response['id'];
         final String shareLink = "https://unrivaled-daffodil-b35f26.netlify.app/?id=$newId";
 
@@ -408,13 +438,9 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
               decoration: InputDecoration(
                 labelText: "Judul PO (Misal: Jaket Himpunan)", 
                 border: const OutlineInputBorder(),
-                // ==========================================
-                // PERBAIKAN: Menampilkan pesan error lokal
-                // ==========================================
                 errorText: _titleError,
               ),
               onChanged: (_) {
-                // Hapus pesan error saat user mulai ngetik
                 if (_titleError != null) setState(() => _titleError = null);
               },
             ),
@@ -441,9 +467,6 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                 ElevatedButton.icon(onPressed: () => _showQuestionDialog(), icon: const Icon(Icons.add), label: const Text("Tambah"), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white))
               ],
             ),
-            // ==========================================
-            // PERBAIKAN: Pesan error merah jika list item kosong
-            // ==========================================
             if (_questionsError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),

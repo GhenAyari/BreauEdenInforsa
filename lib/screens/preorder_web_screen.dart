@@ -3,6 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import '../core/colors.dart'; 
 import 'preorder_admin_screen.dart';
+// ========================================================
+// IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class PreorderWebScreen extends StatefulWidget {
   const PreorderWebScreen({super.key});
@@ -34,18 +38,29 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
     try {
       await _supabase.from('po_submissions').delete().eq('form_id', formId);
       await _supabase.from('po_settings').delete().eq('id', formId);
+      
+      // ========================================================
+      // CATAT LOG HAPUS FORM PO
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'po_settings', aksi: 'HAPUS');
+
       if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Form PO berhasil dihapus!"), backgroundColor: Colors.red)); }
     } catch (e) {
       if (mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)); }
     }
   }
 
-
   Future<void> _togglePoStatus(String formId, bool currentStatus, String title) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
       // Kebalikan dari status saat ini (kalau true jadi false, kalau false jadi true)
       await _supabase.from('po_settings').update({'is_active': !currentStatus}).eq('id', formId);
+      
+      // ========================================================
+      // CATAT LOG UBAH STATUS (JEDA/AKTIFKAN)
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'po_settings', aksi: 'UBAH');
+
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -58,6 +73,57 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
       }
+    }
+  }
+
+  // ========================================================
+  // FITUR BARU 1: Popup Konfirmasi Jeda/Aktifkan Form
+  // ========================================================
+  Future<void> _confirmToggleStatus(String formId, bool currentStatus, String title) async {
+    String actionText = currentStatus ? "menjeda" : "mengaktifkan";
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(currentStatus ? "Jeda Form PO?" : "Aktifkan Form PO?", style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text("Yakin ingin $actionText form '$title'?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: currentStatus ? Colors.orange : Colors.green, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(currentStatus ? "Ya, Jeda" : "Ya, Aktifkan")
+          ),
+        ],
+      )
+    ) ?? false;
+
+    if (confirm) {
+      _togglePoStatus(formId, currentStatus, title);
+    }
+  }
+
+  // ========================================================
+  // FITUR BARU 2: Popup Konfirmasi Edit Form
+  // ========================================================
+  Future<void> _confirmEdit(Map<String, dynamic> po) async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Edit Form PO?", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text("Yakin ingin masuk ke halaman edit untuk form '${po['title']}'?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Ya, Edit")
+          ),
+        ],
+      )
+    ) ?? false;
+
+    if (confirm && mounted) {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => PreorderAdminScreen(existingPo: po)));
     }
   }
 
@@ -141,7 +207,8 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
                                   icon: Icon(isActive ? Icons.pause_circle_outline : Icons.play_circle_outline, color: isActive ? Colors.orange : Colors.green, size: 20),
                                   tooltip: isActive ? "Jeda Form" : "Aktifkan Form",
                                   constraints: const BoxConstraints(), padding: const EdgeInsets.all(4),
-                                  onPressed: () => _togglePoStatus(po['id'].toString(), isActive, po['title']),
+                                  // PERBAIKAN: Gunakan fungsi konfirmasi
+                                  onPressed: () => _confirmToggleStatus(po['id'].toString(), isActive, po['title']),
                                 ),
                                 const SizedBox(width: 8),
                                 IconButton(
@@ -159,7 +226,8 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
                                   icon: const Icon(Icons.edit, color: Colors.blueGrey, size: 20),
                                   tooltip: "Edit",
                                   constraints: const BoxConstraints(), padding: const EdgeInsets.all(4),
-                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => PreorderAdminScreen(existingPo: po))),
+                                  // PERBAIKAN: Gunakan fungsi konfirmasi
+                                  onPressed: () => _confirmEdit(po),
                                 ),
                                 const SizedBox(width: 8), 
                                 IconButton(

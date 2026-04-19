@@ -11,6 +11,10 @@ import 'package:share_plus/share_plus.dart';
 import '../core/colors.dart';
 import 'preorder_admin_screen.dart';
 import 'preorder_web_screen.dart';
+// ========================================================
+// IMPORT AGEN RAHASIA LOG SERVICE
+// ========================================================
+import '../services/log_service.dart';
 
 class PreOrderScreen extends StatefulWidget {
   const PreOrderScreen({super.key});
@@ -73,7 +77,7 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           actions: [
-           
+            
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: "Refresh Data",
@@ -422,7 +426,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
     return answers.isNotEmpty ? answers.values.first.toString() : "Tanpa Nama";
   }
 
- 
+  
   String _formatTanggalWaktu(String isoString) {
     try {
       DateTime dt = DateTime.parse(isoString).toLocal();
@@ -543,6 +547,12 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
           .from('po_submissions')
           .update({'status': 'Sudah Diterima'})
           .eq('id', submissionId);
+      
+      // ========================================================
+      // CATAT LOG PENERIMAAN PESANAN
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'po_submissions', aksi: 'UBAH');
+
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
       if (context.mounted) {
@@ -591,6 +601,12 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
     );
     try {
       await _supabase.from('po_submissions').delete().eq('id', submissionId);
+      
+      // ========================================================
+      // CATAT LOG HAPUS PESANAN
+      // ========================================================
+      await LogService.catatAktivitas(modul: 'po_submissions', aksi: 'HAPUS');
+
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
       if (context.mounted) {
@@ -690,7 +706,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
                   : Builder(
                       builder: (context) {
                         final filteredSubmissions = _allSubsList.where((sub) {
-                         
+                          
                           final customerName = _getCustomerName(
                             sub['answers'] ?? {},
                           );
@@ -924,7 +940,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
                                                             Colors.red,
                                                         foregroundColor:
                                                             Colors.white,
-                                                      ),
+                                                  ),
                                                   onPressed: () =>
                                                       _deleteSubmission(
                                                         context,
@@ -947,7 +963,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
                                                             Colors.green,
                                                         foregroundColor:
                                                             Colors.white,
-                                                      ),
+                                                  ),
                                                   onPressed: () =>
                                                       _markAsReceived(
                                                         context,
