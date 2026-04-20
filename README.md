@@ -68,3 +68,49 @@
 
 ---
 
+## Dokumentasi
+
+### Tampilan Login
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/1237fb39-c785-4b86-987d-1adae3d264a4" />
+
+---
+### Tampilan Home
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/f11f90b8-a842-4581-a9bc-72c48c8fd395" />
+
+---
+### Tampilan POS
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/795f3cba-c75d-4bfe-8ac4-a792b9d94221" />
+
+---
+### Tampilan Manajemen Stok (Store)
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/23c395a0-9de7-4ea2-a4d8-f8ffbfe01dad" />
+
+---
+### Tampilan Manajemen Stok (Stand)
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/bf8941ba-8b36-4151-8d96-76bb417e69f7" />
+
+---
+### Tampilan Manajemen Stok (Eden)
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/ec47141c-e844-44a7-a2a2-245247650663" />
+
+---
+### Tampilan Manajemen Stok (Penyewaan)
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/66d8b841-deec-4576-aac7-9877ec5e3c69" />
+
+---
+### Tampilan Pengaturan & Akun
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/6c8d4a0e-8afe-41f4-95e4-e8c6953e2826" />
+
+---
+### Tampilan Penyewaan Barang
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/434e17f4-1331-48f6-aeca-f2d35b225a8a" />
+
+---
+### Tampilan Manajemen Pre-Order
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/ce92b13f-eebc-4f33-a291-8d73076b0afb" />
+
+---
+### Tampilan Riwayat Aktivitas
+<img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/6b31ab32-ee1e-4859-ba05-e9080256a715" />
+
+---
