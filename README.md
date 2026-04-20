@@ -152,3 +152,6 @@ Antarmuka pengguna pada aplikasi ini dibangun dengan arsitektur komponen (widget
 <img width="375" height="667" alt="image" src="https://github.com/user-attachments/assets/6b31ab32-ee1e-4859-ba05-e9080256a715" />
 
 ---
+
+## 📱 Download APK
+[Klik di sini](https://github.com/GhenAyari/BreauEdenInforsa/releases/tag/v1.0.0)
