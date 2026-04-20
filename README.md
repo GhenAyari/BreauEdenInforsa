@@ -43,28 +43,66 @@
 
 ---
 
-## 🛠️ Tech Stack & Dependencies
+## Packages
 
-### Backend & Core
-* **[Flutter](https://flutter.dev/)**: SDK UI untuk *cross-platform app development*.
-* **[Supabase Flutter](https://pub.dev/packages/supabase_flutter)**: Sebagai *Backend-as-a-Service* (BaaS) untuk Autentikasi, Database PostgreSQL (*Realtime updates*), dan Storage (Penyimpanan gambar).
+Aplikasi ini dikembangkan menggunakan kerangka kerja Flutter dan memanfaatkan beberapa pustaka eksternal untuk mendukung berbagai fitur inti. Berikut adalah daftar pustaka utama yang digunakan:
 
-### Local Storage & State Management
-* **[Shared Preferences](https://pub.dev/packages/shared_preferences)**: Menyimpan sesi *Role* pengguna, preferensi *Dark Mode*, dan status visibilitas saldo.
-* **[Flutter Dotenv](https://pub.dev/packages/flutter_dotenv)**: Manajemen rahasia *Environment Variables* (.env).
+### 1. Inti Sistem dan Database
+* **supabase_flutter**: Digunakan sebagai antarmuka utama untuk berkomunikasi dengan layanan Supabase, meliputi operasi basis data (CRUD), autentikasi pengguna, dan penyimpanan berkas (storage).
+* **flutter_dotenv**: Digunakan untuk mengelola variabel lingkungan (environment variables). Pustaka ini mengamankan kredensial penting seperti kunci layanan (service key) Supabase agar tidak tertulis langsung di dalam kode sumber.
 
-### Utilities & Tools
-* **[Image Picker](https://pub.dev/packages/image_picker)**: Mengambil foto dari kamera atau galeri untuk barang dan bukti transfer.
-* **[CSV](https://pub.dev/packages/csv)**: Konversi data JSON transaksi ke format tabel Excel.
-* **[Path Provider](https://pub.dev/packages/path_provider)**: Menemukan lokasi *temporary directory* pada *device* untuk menyimpan file CSV sementara.
-* **[Share Plus](https://pub.dev/packages/share_plus)**: Membagikan file CSV laporan via aplikasi eksternal (WhatsApp, Drive, dll).
-* **https://play.google.com/store/apps/details?id=com.nkart.launcher&hl=en(https://pub.dev/packages/url_launcher)**: Membuka link eksternal dari dalam aplikasi.
+### 2. Penyimpanan Lokal dan Perangkat
+* **shared_preferences**: Digunakan untuk menyimpan data preferensi pengguna secara lokal di memori perangkat, seperti status sesi masuk (login), preferensi tema (gelap/terang), dan pengaturan visibilitas saldo.
+* **device_info_plus**: Digunakan untuk mengambil informasi detail mengenai perangkat keras yang digunakan oleh pengguna (merek dan model), yang kemudian dicatat dalam log riwayat aktivitas sistem.
 
-### UI & UX Components (Native Material 3)
-* `NavigationBar` & `NavigationDestination` (Menu bawah dinamis).
-* `StreamBuilder` & `FutureBuilder` (Reaktivitas data *Realtime*).
-* `AnimatedSwitcher` & `AnimatedSize` (Transisi mulus dan laci keranjang POS).
-* `showModalBottomSheet` & `AlertDialog` (Dialog konfirmasi dan rincian transaksi).
+### 3. Manajemen Media dan Dokumen
+* **image_picker**: Digunakan untuk mengambil gambar, baik melalui kamera perangkat maupun galeri lokal. Fitur ini diterapkan pada modul manajemen stok, pre-order, dan bukti transaksi.
+* **csv**: Digunakan untuk memformat dan mengonversi data dari basis data menjadi berkas berekstensi CSV, yang berfungsi sebagai laporan untuk diunduh.
+* **path_provider**: Digunakan untuk menemukan dan mengakses direktori sistem berkas lokal pada perangkat, yang diperlukan untuk menyimpan berkas CSV sementara sebelum dibagikan.
+* **share_plus**: Digunakan untuk memanggil dialog berbagi bawaan sistem operasi (native share dialog), memungkinkan pengguna untuk mengirimkan berkas laporan ke aplikasi lain seperti email atau platform pesan instan.
+
+### 4. Utilitas Eksternal
+* **url_launcher**: Digunakan untuk membuka tautan eksternal di luar aplikasi, seperti membuka peramban web (browser) untuk menampilkan bukti gambar atau dokumen yang dikirimkan oleh pelanggan.
+
+---
+
+## Komponen Antarmuka (Widgets)
+
+Antarmuka pengguna pada aplikasi ini dibangun dengan arsitektur komponen (widget) yang modular. Berikut adalah kategorisasi widget yang digunakan dalam proyek ini:
+
+### 1. Struktur dan Tata Letak (Layouting)
+* **Scaffold**: Kerangka dasar halaman yang menampung komponen seperti bilah aplikasi dan konten utama.
+* **AppBar**: Bilah navigasi dan informasi di bagian atas layar.
+* **Column & Row**: Pengatur tata letak elemen secara vertikal dan horizontal.
+* **ListView & GridView**: Penampil daftar elemen yang dapat digulir, baik dalam bentuk baris maupun grid berskala.
+* **Stack & Positioned**: Pengatur tata letak bertumpuk untuk elemen antarmuka yang saling tumpang tindih.
+* **Container, Padding, SizedBox, Expanded**: Komponen dasar untuk mengatur ruang, jarak, margin, dan proporsi dimensi elemen.
+
+### 2. Input dan Interaksi Pengguna
+* **Button Components**: Meliputi `ElevatedButton`, `OutlinedButton`, `TextButton`, dan `IconButton` untuk memfasilitasi tindakan pengguna.
+* **TextField**: Kolom masukan teks yang dilengkapi dengan `TextInputFormatter` untuk validasi format karakter dan angka secara langsung.
+* **DropdownButtonFormField**: Menu tarik-turun untuk pemilihan opsi tunggal yang terintegrasi dengan validasi formulir.
+* **SwitchListTile**: Komponen sakelar biner untuk pengaturan seperti mode gelap atau penanda status.
+* **GestureDetector & InkWell**: Menambahkan kemampuan deteksi sentuhan dan gestur pada komponen statis.
+
+### 3. Penampil Informasi (Display)
+* **Text & Icon**: Komponen dasar penyajian tipografi dan ikonografi sistem.
+* **Image**: Penampil grafis yang menangani gambar dari URL jaringan (`NetworkImage`) dan memori lokal (`MemoryImage`).
+* **Card**: Penampil wadah elemen dengan efek bayangan (elevation) untuk memisahkan hierarki informasi visual.
+* **ListTile & ExpansionTile**: Penampil baris data terstruktur, dilengkapi dengan kemampuan ekspansi untuk menampilkan rincian lebih lanjut.
+* **CircleAvatar**: Penampil visual berbentuk lingkaran, umumnya digunakan untuk ikon profil atau indikator status.
+
+### 4. Manajemen Status dan Asinkronus
+* **FutureBuilder**: Membangun komponen berdasarkan status resolusi operasi asinkron tunggal (pengambilan data satu kali).
+* **StreamBuilder**: Membangun komponen secara reaktif berdasarkan aliran data waktu nyata (real-time) dari basis data.
+* **RefreshIndicator**: Mengimplementasikan mekanisme tarik-untuk-menyegarkan (pull-to-refresh) pada daftar gulir.
+* **StatefulBuilder**: Memungkinkan pembaruan status pada sebagian kecil komponen tanpa merender ulang seluruh halaman, sangat berguna pada antarmuka dialog modal.
+* **DefaultTabController, TabBar, TabBarView**: Mengelola dan menyajikan antarmuka navigasi berbasis tab untuk pergantian tampilan kategori.
+
+### 5. Lapisan Tampilan (Overlay & Dialog)
+* **AlertDialog**: Menampilkan kotak dialog modal untuk konfirmasi tindakan kritis atau peringatan.
+* **BottomSheet**: Menampilkan panel yang muncul dari bawah layar untuk memberikan opsi tambahan atau merender formulir sementara.
+* **SnackBar**: Menyajikan pesan notifikasi singkat di bagian bawah layar terkait keberhasilan atau kegagalan suatu proses.
 
 ---
 
