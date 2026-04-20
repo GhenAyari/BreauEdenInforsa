@@ -25,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // Sekarang menerima String role (bukan bool success)
+    
     String? role = await _authService.login(
       _emailController.text,
       _passwordController.text,

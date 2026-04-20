@@ -12,14 +12,13 @@ class LogService {
     required String aksi,
   }) async {
     try {
-      // 1. Ambil Identitas User yang lagi Login
+   
       final prefs = await SharedPreferences.getInstance();
       final String userId = _supabase.auth.currentUser?.id ?? '';
-      // Pastikan key ini sama dengan yang kamu pakai pas login ya
       final String namaUser = prefs.getString('user_name') ?? 'Pengurus'; 
       final String divisiUser = prefs.getString('user_role') ?? 'Admin'; 
 
-      // 2. Operasi Intelijen: Lacak Merek HP / Perangkat
+   
       String namaPerangkat = "Perangkat Tidak Diketahui";
       DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
 
@@ -29,17 +28,17 @@ class LogService {
       } else {
         if (Platform.isAndroid) {
           AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-          // Hasilnya misal: "Infinix X6833B" atau "samsung SM-A528B"
+       
           namaPerangkat = "${androidInfo.brand} ${androidInfo.model}".toUpperCase();
         } else if (Platform.isIOS) {
           IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-          namaPerangkat = iosInfo.name; // Hasilnya misal: "iPhone 13"
+          namaPerangkat = iosInfo.name; 
         } else if (Platform.isWindows) {
           namaPerangkat = "Aplikasi Windows Desktop";
         }
       }
 
-      // 3. Kirim Data Lengkap ke Supabase
+  
       await _supabase.from('log_aktivitas').insert({
         'id_user': userId.isNotEmpty ? userId : null,
         'nama_user': namaUser,

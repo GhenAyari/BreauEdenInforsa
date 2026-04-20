@@ -3,9 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import '../core/colors.dart'; 
 import 'preorder_admin_screen.dart';
-// ========================================================
-// IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class PreorderWebScreen extends StatefulWidget {
@@ -18,22 +15,22 @@ class PreorderWebScreen extends StatefulWidget {
 class _PreorderWebScreenState extends State<PreorderWebScreen> {
   final _supabase = Supabase.instance.client;
 
-  // PERBAIKAN 1: State untuk tampung data manual (Bukan Stream lagi)
+
   List<Map<String, dynamic>> _poList = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tarikDataPO(); // Panggil saat layar pertama dibuka
+    _tarikDataPO(); 
   }
 
-  // PERBAIKAN 2: Fungsi untuk narik data PO
+  
   Future<void> _tarikDataPO() async {
     if (mounted) setState(() => _isLoading = true);
     
     try {
-      // Ambil semua data tanpa filter is_active agar yang dijeda tetap muncul
+    
       final data = await _supabase
           .from('po_settings')
           .select()
@@ -51,7 +48,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
     }
   }
 
-  // Fungsi Hapus
+  
   Future<void> _deletePoForm(String formId, String formTitle) async {
     bool confirm = await showDialog(
       context: context,
@@ -72,12 +69,12 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
       await _supabase.from('po_submissions').delete().eq('form_id', formId);
       await _supabase.from('po_settings').delete().eq('id', formId);
       
-      // CATAT LOG HAPUS FORM PO
+      
       await LogService.catatAktivitas(modul: 'po_settings', aksi: 'HAPUS');
 
       if (mounted) { 
         Navigator.pop(context); 
-        _tarikDataPO(); // PERBAIKAN: Refresh layar setelah hapus
+        _tarikDataPO(); 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Form PO berhasil dihapus!"), backgroundColor: Colors.red)); 
       }
     } catch (e) {
@@ -91,12 +88,12 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
       // Kebalikan dari status saat ini (kalau true jadi false, kalau false jadi true)
       await _supabase.from('po_settings').update({'is_active': !currentStatus}).eq('id', formId);
       
-      // CATAT LOG UBAH STATUS (JEDA/AKTIFKAN)
+     
       await LogService.catatAktivitas(modul: 'po_settings', aksi: 'UBAH');
 
       if (mounted) {
         Navigator.pop(context);
-        _tarikDataPO(); // PERBAIKAN: Refresh layar setelah ubah status
+        _tarikDataPO(); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(!currentStatus ? "Form '$title' diaktifkan!" : "Form '$title' dijeda!"), 
           backgroundColor: !currentStatus ? Colors.green : Colors.orange
@@ -156,7 +153,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
       Navigator.push(
         context, 
         MaterialPageRoute(builder: (context) => PreorderAdminScreen(existingPo: po))
-      ).then((_) => _tarikDataPO()); // PERBAIKAN: Refresh saat balik dari halaman edit
+      ).then((_) => _tarikDataPO()); 
     }
   }
 
@@ -176,13 +173,13 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
           ),
         ],
       ),
-      // PERBAIKAN 3: Pasang RefreshIndicator membungkus GridView
+      
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _tarikDataPO,
               child: _poList.isEmpty
-                  ? ListView( // Pakai ListView kosong biar layarnya tetep bisa ditarik
+                  ? ListView( 
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: const [
                         SizedBox(height: 300),
@@ -190,7 +187,7 @@ class _PreorderWebScreenState extends State<PreorderWebScreen> {
                       ],
                     )
                   : GridView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(), // Wajib biar bisa di-refresh
+                      physics: const AlwaysScrollableScrollPhysics(), 
                       padding: const EdgeInsets.all(12),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2, 

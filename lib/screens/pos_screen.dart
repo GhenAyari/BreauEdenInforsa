@@ -8,9 +8,7 @@ import '../core/colors.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-// ========================================================
-// 1. IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
+
 import '../services/log_service.dart';
 
 class PosScreen extends StatefulWidget {
@@ -38,9 +36,7 @@ class _PosScreenState extends State<PosScreen> {
   void initState() {
     super.initState();
     _checkActiveSession();
-    // ========================================================
-    // PERBAIKAN: Hanya menarik data kategori 'stand' saja
-    // ========================================================
+  
     _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'stand').order('name');
   }
 
@@ -70,9 +66,7 @@ class _PosScreenState extends State<PosScreen> {
         'modal_awal': 0  
       }).select('id').single();
 
-      // ========================================================
-      // MANGGIL AGEN LOG UNTUK MENCATAT BUKA SESI
-      // ========================================================
+     
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'TAMBAH');
 
       if (mounted) {
@@ -101,9 +95,7 @@ class _PosScreenState extends State<PosScreen> {
         'closed_at': DateTime.now().toIso8601String(),
       }).eq('id', _currentSessionId!);
 
-      // ========================================================
-      // MANGGIL AGEN LOG UNTUK MENCATAT TUTUP SESI
-      // ========================================================
+    
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
@@ -130,9 +122,7 @@ class _PosScreenState extends State<PosScreen> {
         'status': 'paused',
       }).eq('id', _currentSessionId!);
 
-      // ========================================================
-      // MANGGIL AGEN LOG UNTUK MENCATAT JEDA SESI
-      // ========================================================
+    
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
@@ -260,9 +250,7 @@ class _PosScreenState extends State<PosScreen> {
         await _supabase.from('products').update({'stock': newStock}).eq('id', item['id']);
       }
 
-      // ========================================================
-      // MANGGIL AGEN LOG UNTUK MENCATAT TRANSAKSI BARU
-      // ========================================================
+      
       await LogService.catatAktivitas(modul: 'transactions', aksi: 'TAMBAH');
 
       if (mounted) {

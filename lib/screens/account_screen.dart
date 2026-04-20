@@ -5,9 +5,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import '../main.dart'; 
 import '../core/colors.dart';
-// ========================================================
-// IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -103,9 +100,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     return;
                   }
 
-                  // ========================================================
-                  // FITUR BARU: POPUP KONFIRMASI TAMBAH PENGURUS
-                  // ========================================================
+                
                   bool confirm = await showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -122,7 +117,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     )
                   ) ?? false;
 
-                  if (!confirm) return; // Batal simpan kalau pencet cancel atau sembarang tempat
+                  if (!confirm) return; 
 
                   setDialogState(() => isLoading = true);
 
@@ -152,7 +147,7 @@ if (url.isEmpty || serviceKey.isEmpty) {
                         'status': 'Aktif'
                       });
                       
-                      // MANGGIL AGEN LOG UNTUK MENCATAT PENAMBAHAN PENGURUS
+       
                       await LogService.catatAktivitas(modul: 'pengurus', aksi: 'TAMBAH');
                     }
 
@@ -222,9 +217,6 @@ if (url.isEmpty || serviceKey.isEmpty) {
                 onPressed: isLoading ? null : () async {
                   if (nameCtrl.text.isEmpty) return;
 
-                  // ========================================================
-                  // FITUR BARU: POPUP KONFIRMASI UPDATE PENGURUS
-                  // ========================================================
                   bool confirm = await showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -241,7 +233,7 @@ if (url.isEmpty || serviceKey.isEmpty) {
                     )
                   ) ?? false;
 
-                  if (!confirm) return; // Batal update kalau pencet cancel
+                  if (!confirm) return; 
 
                   setDialogState(() => isLoading = true);
 
@@ -252,7 +244,7 @@ if (url.isEmpty || serviceKey.isEmpty) {
                       'status': selectedStatus,
                     }).eq('id', user['id']);
 
-                    // MANGGIL AGEN LOG UNTUK MENCATAT UPDATE PENGURUS
+                  
                     await LogService.catatAktivitas(modul: 'pengurus', aksi: 'UBAH');
 
                     _tarikDataPengurus(); 

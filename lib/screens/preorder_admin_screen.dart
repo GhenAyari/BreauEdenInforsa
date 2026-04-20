@@ -5,9 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/colors.dart'; 
 import 'package:flutter/services.dart'; 
-// ========================================================
-// IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class PreorderAdminScreen extends StatefulWidget {
@@ -161,9 +158,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // ========================================================
-                              // PERBAIKAN: Tanda minus (-) dihapus dari sini!
-                              // ========================================================
+                             
                               Text(opt, style: const TextStyle(fontWeight: FontWeight.bold)),
                               
                               InkWell(
@@ -311,9 +306,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
 
     if (!isValid) return; 
 
-    // ========================================================
-    // FITUR BARU: Popup Konfirmasi Saat Menyimpan Editan
-    // ========================================================
+  
     if (isEditing) {
       bool confirm = await showDialog(
         context: context,
@@ -331,7 +324,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
         )
       ) ?? false;
 
-      if (!confirm) return; // Batal simpan kalau pencet cancel
+      if (!confirm) return; 
     }
 
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
@@ -368,9 +361,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
       if (isEditing) {
         await _supabase.from('po_settings').update(poData).eq('id', widget.existingPo!['id']);
         
-        // ========================================================
-        // CATAT LOG PERUBAHAN PO SETTING
-        // ========================================================
+
         await LogService.catatAktivitas(modul: 'po_settings', aksi: 'UBAH');
 
         if (mounted) {
@@ -381,9 +372,7 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
       } else {
         final response = await _supabase.from('po_settings').insert(poData).select().single();
         
-        // ========================================================
-        // CATAT LOG PENAMBAHAN PO SETTING
-        // ========================================================
+        
         await LogService.catatAktivitas(modul: 'po_settings', aksi: 'TAMBAH');
 
         final String newId = response['id'];

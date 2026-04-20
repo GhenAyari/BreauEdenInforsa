@@ -7,9 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import 'package:flutter/foundation.dart';
 import '../core/colors.dart';
-// ========================================================
-// 1. IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class CurrencyFormat extends TextInputFormatter {
@@ -274,9 +271,7 @@ class _StockScreenState extends State<StockScreen> {
 
                       if (isEditing) {
                         await _supabase.from('products').update(productData).eq('id', product['id']);
-                        // ========================================================
-                        // 2. MANGGIL AGEN LOG UNTUK MENCATAT EDIT/UBAH
-                        // ========================================================
+                  
                         await LogService.catatAktivitas(modul: 'products', aksi: 'UBAH');
                       } else {
                         await _supabase.from('products').insert(productData);
@@ -325,9 +320,7 @@ class _StockScreenState extends State<StockScreen> {
         }
         await _supabase.from('products').delete().eq('id', product['id']);
         
-        // ========================================================
-        // 4. MANGGIL AGEN LOG UNTUK MENCATAT HAPUS
-        // ========================================================
+      
         await LogService.catatAktivitas(modul: 'products', aksi: 'HAPUS');
 
         _tarikDataBarang();

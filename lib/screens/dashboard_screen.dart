@@ -93,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 Row(
                   children: [
-                    // Lencana Divisi
+                
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(20)),
@@ -142,7 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.receipt_long,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PreOrderScreen())),
                   ),
-                  // Kotak Riwayat Aktivitas (Bisa dilihat semua orang, tapi RLS Supabase yang memfilter isinya)
+                  
                 ActionCard(
                   title: "Riwayat", 
                   icon: Icons.history,

@@ -19,10 +19,10 @@ class _LogScreenState extends State<LogScreen> {
   @override
   void initState() {
     super.initState();
-    _tarikDataLog(); // Panggil data pertama kali saat layar dibuka
+    _tarikDataLog(); 
   }
 
-  // PERBAIKAN 2: Bikin fungsi khusus buat narik data
+ 
   Future<void> _tarikDataLog() async {
     if (mounted) setState(() => _isLoading = true);
     
@@ -50,7 +50,7 @@ class _LogScreenState extends State<LogScreen> {
       DateTime dt = DateTime.parse(isoString).toLocal();
       return "${dt.day}/${dt.month}/${dt.year} - ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) {
-      return isoString; // Jaga-jaga kalau format tanggalnya aneh
+      return isoString; 
     }
   }
 
@@ -69,7 +69,7 @@ class _LogScreenState extends State<LogScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
-          // Tombol Refresh manual di pojok kanan atas
+        
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Refresh Data",
@@ -78,7 +78,7 @@ class _LogScreenState extends State<LogScreen> {
         ],
       ),
       backgroundColor: Colors.grey.shade100,
-      // PERBAIKAN 3: Ganti StreamBuilder dengan RefreshIndicator
+   
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -95,7 +95,7 @@ class _LogScreenState extends State<LogScreen> {
                       ],
                     )
                   : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(), // Wajib biar RefreshIndicator jalan
+                      physics: const AlwaysScrollableScrollPhysics(), 
                       padding: const EdgeInsets.all(12),
                       itemCount: _logList.length,
                       itemBuilder: (context, index) {

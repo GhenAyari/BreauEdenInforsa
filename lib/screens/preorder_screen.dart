@@ -11,9 +11,6 @@ import 'package:share_plus/share_plus.dart';
 import '../core/colors.dart';
 import 'preorder_admin_screen.dart';
 import 'preorder_web_screen.dart';
-// ========================================================
-// IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class PreOrderScreen extends StatefulWidget {
@@ -437,7 +434,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
       String min = dt.minute.toString().padLeft(2, '0');
       return "$y-$m-$d $h:$min";
     } catch (e) {
-      return isoString.split('T')[0]; // Jaga-jaga kalau error, balik ke tanggal aja
+      return isoString.split('T')[0]; 
     }
   }
 
@@ -547,10 +544,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
           .from('po_submissions')
           .update({'status': 'Sudah Diterima'})
           .eq('id', submissionId);
-      
-      // ========================================================
-      // CATAT LOG PENERIMAAN PESANAN
-      // ========================================================
+    
       await LogService.catatAktivitas(modul: 'po_submissions', aksi: 'UBAH');
 
       if (context.mounted) Navigator.pop(context);
@@ -602,9 +596,7 @@ class _PoDetailScreenState extends State<PoDetailScreen> {
     try {
       await _supabase.from('po_submissions').delete().eq('id', submissionId);
       
-      // ========================================================
-      // CATAT LOG HAPUS PESANAN
-      // ========================================================
+   
       await LogService.catatAktivitas(modul: 'po_submissions', aksi: 'HAPUS');
 
       if (context.mounted) Navigator.pop(context);

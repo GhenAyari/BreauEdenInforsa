@@ -75,7 +75,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    // FITUR BARU: Deteksi mode tema saat ini (Light / Dark)
+   
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
