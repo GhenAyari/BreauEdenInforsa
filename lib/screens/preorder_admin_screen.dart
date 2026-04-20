@@ -161,7 +161,11 @@ class _PreorderAdminScreenState extends State<PreorderAdminScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text("- $opt"),
+                              // ========================================================
+                              // PERBAIKAN: Tanda minus (-) dihapus dari sini!
+                              // ========================================================
+                              Text(opt, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              
                               InkWell(
                                 onTap: () => setStateDialog(() => tempOptions.removeAt(idx)),
                                 child: const Icon(Icons.close, color: Colors.red, size: 18),

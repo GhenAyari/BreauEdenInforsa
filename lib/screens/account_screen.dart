@@ -127,10 +127,12 @@ class _AccountScreenState extends State<AccountScreen> {
                   setDialogState(() => isLoading = true);
 
                   try {
-                    final url = dotenv.env['SUPABASE_URL'] ?? 'https://lukiszwznteofbswbdbo.supabase.co';
-                    final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
-                    
-                    if (serviceKey.isEmpty) throw "Kunci SUPABASE_SERVICE_KEY belum dipasang di .env!";
+                    final url = dotenv.env['SUPABASE_URL'] ?? '';
+final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
+
+if (url.isEmpty || serviceKey.isEmpty) {
+  throw "Kunci SUPABASE_URL atau SERVICE_KEY belum dipasang di .env!";
+}
 
                     final adminClient = SupabaseClient(url, serviceKey);
 
