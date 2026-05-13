@@ -10,9 +10,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:csv/csv.dart'; 
 import '../core/colors.dart';
-// ========================================================
-// 1. IMPORT AGEN RAHASIA LOG SERVICE
-// ========================================================
 import '../services/log_service.dart';
 
 class RentalScreen extends StatefulWidget {
@@ -220,9 +217,6 @@ class _RentalScreenState extends State<RentalScreen> {
       final newStock = product['stock'] - qty;
       await _supabase.from('products').update({'stock': newStock}).eq('id', product['id']);
       
-      // ========================================================
-      // 2. MANGGIL AGEN LOG UNTUK MENCATAT PENYEWAAN BARU
-      // ========================================================
       await LogService.catatAktivitas(modul: 'rentals', aksi: 'TAMBAH');
 
       if (mounted) { Navigator.pop(context); _tarikDataManual(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Barang berhasil disewakan!"), backgroundColor: Colors.green)); }
@@ -295,9 +289,6 @@ class _RentalScreenState extends State<RentalScreen> {
         await _supabase.from('products').update({'stock': newStock}).eq('id', rental['product_id']);
       }
       
-      // ========================================================
-      // 3. MANGGIL AGEN LOG UNTUK MENCATAT PENGEMBALIAN (UBAH/UPDATE)
-      // ========================================================
       await LogService.catatAktivitas(modul: 'rentals', aksi: 'UBAH');
 
       if (mounted) { Navigator.pop(context); _tarikDataManual(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Barang telah dikembalikan!"), backgroundColor: Colors.green)); }
@@ -337,9 +328,6 @@ class _RentalScreenState extends State<RentalScreen> {
       try {
         await _supabase.from('rentals').delete().eq('id', id);
         
-        // ========================================================
-        // 4. MANGGIL AGEN LOG UNTUK MENCATAT PENGHAPUSAN
-        // ========================================================
         await LogService.catatAktivitas(modul: 'rentals', aksi: 'HAPUS');
 
         if (mounted) { Navigator.pop(context); _tarikDataManual(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Riwayat berhasil dihapus"), backgroundColor: Colors.red)); }

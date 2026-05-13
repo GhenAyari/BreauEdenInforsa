@@ -5,7 +5,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import '../main.dart'; 
 import '../core/colors.dart';
+// ========================================================
+// IMPORT AGEN RAHASIA LOG & BIOMETRIK
+// ========================================================
 import '../services/log_service.dart';
+import '../services/biometric_service.dart'; // Tambahan Biometrik
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -19,11 +23,21 @@ class _AccountScreenState extends State<AccountScreen> {
   
   List<Map<String, dynamic>> _pengurusList = [];
   bool _isLoading = true;
+  bool _useBiometrics = false; // Status awal tombol sidik jari
 
   @override
   void initState() {
     super.initState();
     _tarikDataPengurus(); 
+    _cekStatusBiometrik(); // Cek memori HP apakah fitur ini lagi nyala/mati
+  }
+
+  // Fungsi untuk mengecek status sakelar dari memori HP
+  Future<void> _cekStatusBiometrik() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _useBiometrics = prefs.getBool('use_fingerprint') ?? false;
+    });
   }
 
   Future<void> _tarikDataPengurus() async {
@@ -100,7 +114,6 @@ class _AccountScreenState extends State<AccountScreen> {
                     return;
                   }
 
-                
                   bool confirm = await showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -122,12 +135,15 @@ class _AccountScreenState extends State<AccountScreen> {
                   setDialogState(() => isLoading = true);
 
                   try {
+                    // ========================================================
+                    // PERBAIKAN: ENV URL Supabase biar lebih rapi & aman
+                    // ========================================================
                     final url = dotenv.env['SUPABASE_URL'] ?? '';
-final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
-
-if (url.isEmpty || serviceKey.isEmpty) {
-  throw "Kunci SUPABASE_URL atau SERVICE_KEY belum dipasang di .env!";
-}
+                    final serviceKey = dotenv.env['SUPABASE_SERVICE_KEY'] ?? '';
+                    
+                    if (url.isEmpty || serviceKey.isEmpty) {
+                      throw "Kunci SUPABASE_URL atau SERVICE_KEY belum dipasang di .env!";
+                    }
 
                     final adminClient = SupabaseClient(url, serviceKey);
 
@@ -147,7 +163,6 @@ if (url.isEmpty || serviceKey.isEmpty) {
                         'status': 'Aktif'
                       });
                       
-       
                       await LogService.catatAktivitas(modul: 'pengurus', aksi: 'TAMBAH');
                     }
 
@@ -244,7 +259,6 @@ if (url.isEmpty || serviceKey.isEmpty) {
                       'status': selectedStatus,
                     }).eq('id', user['id']);
 
-                  
                     await LogService.catatAktivitas(modul: 'pengurus', aksi: 'UBAH');
 
                     _tarikDataPengurus(); 
@@ -280,31 +294,72 @@ if (url.isEmpty || serviceKey.isEmpty) {
           
           Padding(
             padding: const EdgeInsets.all(12.0),
-            child: ValueListenableBuilder<ThemeMode>(
-              valueListenable: themeNotifier, 
-              builder: (context, currentMode, child) {
-                final isDark = currentMode == ThemeMode.dark;
+            child: Column(
+              children: [
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: themeNotifier, 
+                  builder: (context, currentMode, child) {
+                    final isDark = currentMode == ThemeMode.dark;
+                    
+                    return Card(
+                      elevation: 2,
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: SwitchListTile(
+                        title: const Text("Mode Gelap", style: TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: const Text("Ubah tampilan aplikasi menjadi gelap"),
+                        secondary: Icon(
+                          isDark ? Icons.dark_mode : Icons.light_mode, 
+                          color: isDark ? Colors.amber : Colors.orange
+                        ),
+                        value: isDark,
+                        onChanged: (value) async {
+                          themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+                          SharedPreferences prefs = await SharedPreferences.getInstance();
+                          prefs.setBool('is_dark_mode', value);
+                        },
+                      ),
+                    );
+                  }
+                ),
+                const SizedBox(height: 10),
                 
-                return Card(
+                // ========================================================
+                // FITUR BARU: TOMBOL SAKELAR SIDIK JARI
+                // ========================================================
+                Card(
                   elevation: 2,
                   margin: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: SwitchListTile(
-                    title: const Text("Mode Gelap", style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text("Ubah tampilan aplikasi menjadi gelap"),
-                    secondary: Icon(
-                      isDark ? Icons.dark_mode : Icons.light_mode, 
-                      color: isDark ? Colors.amber : Colors.orange
-                    ),
-                    value: isDark,
+                    title: const Text("Login Sidik Jari", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Masuk lebih cepat tanpa ketik password"),
+                    secondary: const Icon(Icons.fingerprint, color: Colors.blue),
+                    value: _useBiometrics,
                     onChanged: (value) async {
-                      themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
-                      SharedPreferences prefs = await SharedPreferences.getInstance();
-                      prefs.setBool('is_dark_mode', value);
+                      if (value) {
+                        // User mau NGIDUPIN fitur ini. Kita tes dulu jarinya!
+                        bool success = await BiometricService.authenticate();
+                        if (success) {
+                          SharedPreferences prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('use_fingerprint', true);
+                          setState(() => _useBiometrics = true);
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mantap! Login Sidik Jari berhasil diaktifkan."), backgroundColor: Colors.green));
+                        } else {
+                          // Batal nyala kalau jarinya nggak cocok / dibatalin
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Akses ditolak. Sidik jari gagal diaktifkan."), backgroundColor: Colors.red));
+                        }
+                      } else {
+                        // User mau MATIIN fitur ini. Langsung eksekusi aja.
+                        SharedPreferences prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('use_fingerprint', false);
+                        setState(() => _useBiometrics = false);
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Login Sidik Jari telah dinonaktifkan.", style: TextStyle(color: Colors.white))));
+                      }
                     },
                   ),
-                );
-              }
+                ),
+              ],
             ),
           ),
           

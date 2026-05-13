@@ -1,5 +1,6 @@
 package com.example.ui_pa_pab_lanjutan
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterFragmentActivity() {
+}
