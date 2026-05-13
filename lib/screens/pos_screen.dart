@@ -8,6 +8,10 @@ import '../core/colors.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+// ==========================================
+// IMPORT PACKAGE FORMAT ANGKA (INTL)
+// ==========================================
+import 'package:intl/intl.dart';
 
 import '../services/log_service.dart';
 
@@ -40,6 +44,15 @@ class _PosScreenState extends State<PosScreen> {
     _productsStream = _supabase.from('products').stream(primaryKey: ['id']).eq('category', 'stand').order('name');
   }
 
+  // ========================================================
+  // FUNGSI SAKTI FORMAT RUPIAH
+  // ========================================================
+  String _formatRupiah(dynamic amount) {
+    if (amount == null) return "Rp 0";
+    double val = double.tryParse(amount.toString()) ?? 0.0;
+    return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(val);
+  }
+
   Future<void> _checkActiveSession() async {
     try {
       final data = await _supabase.from('sessions').select().eq('status', 'open').order('created_at', ascending: false).limit(1);
@@ -52,7 +65,7 @@ class _PosScreenState extends State<PosScreen> {
         });
       }
     } catch (e) {
-      print("Error cek sesi: $e");
+      debugPrint("Error cek sesi: $e");
     }
   }
 
@@ -66,7 +79,6 @@ class _PosScreenState extends State<PosScreen> {
         'modal_awal': 0  
       }).select('id').single();
 
-     
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'TAMBAH');
 
       if (mounted) {
@@ -95,7 +107,6 @@ class _PosScreenState extends State<PosScreen> {
         'closed_at': DateTime.now().toIso8601String(),
       }).eq('id', _currentSessionId!);
 
-    
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
@@ -122,7 +133,6 @@ class _PosScreenState extends State<PosScreen> {
         'status': 'paused',
       }).eq('id', _currentSessionId!);
 
-    
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
@@ -149,9 +159,6 @@ class _PosScreenState extends State<PosScreen> {
         'status': 'open'
       }).eq('id', session['id']);
 
-      // ========================================================
-      // MANGGIL AGEN LOG UNTUK MENCATAT LANJUTKAN SESI
-      // ========================================================
       await LogService.catatAktivitas(modul: 'sessions', aksi: 'UBAH');
 
       if (mounted) {
@@ -193,9 +200,6 @@ class _PosScreenState extends State<PosScreen> {
       try {
         await _supabase.from('sessions').delete().eq('id', sessionId);
         
-        // ========================================================
-        // MANGGIL AGEN LOG UNTUK MENCATAT HAPUS SESI
-        // ========================================================
         await LogService.catatAktivitas(modul: 'sessions', aksi: 'HAPUS');
 
         if (mounted) {
@@ -250,7 +254,6 @@ class _PosScreenState extends State<PosScreen> {
         await _supabase.from('products').update({'stock': newStock}).eq('id', item['id']);
       }
 
-      
       await LogService.catatAktivitas(modul: 'transactions', aksi: 'TAMBAH');
 
       if (mounted) {
@@ -331,7 +334,7 @@ class _PosScreenState extends State<PosScreen> {
       
       await Share.shareXFiles([XFile(path)], text: 'Laporan POS Stand: ${session['stand_name']}');
     } catch (e) {
-      print("Gagal export: $e");
+      debugPrint("Gagal export: $e");
     }
   }
 
@@ -600,7 +603,7 @@ class _PosScreenState extends State<PosScreen> {
                           child: ExpansionTile(
                             leading: const Icon(Icons.history_edu, color: AppColors.primary),
                             title: Text(session['stand_name'] ?? 'Stand Reguler', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("${session['closed_at'].toString().split('T')[0]}\nPenjaga: ${session['operator_name']} | Total: Rp $totalRevenue"),
+                            subtitle: Text("${session['closed_at'].toString().split('T')[0]}\nPenjaga: ${session['operator_name']} | Total: ${_formatRupiah(totalRevenue)}"),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.all(16.0),
@@ -664,8 +667,8 @@ class _PosScreenState extends State<PosScreen> {
     }
     return Column(
       children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tunai:"), Text("Rp $tunai")]),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("QRIS:"), Text("Rp $qris")]),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tunai:"), Text(_formatRupiah(tunai))]),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("QRIS:"), Text(_formatRupiah(qris))]),
       ],
     );
   }
@@ -769,7 +772,7 @@ class _PosScreenState extends State<PosScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text("Total Tagihan: Rp $_cartTotal", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text("Total Tagihan: ${_formatRupiah(_cartTotal)}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
                     const SizedBox(height: 15),
                     Container(
                       width: 200,
@@ -854,44 +857,49 @@ class _PosScreenState extends State<PosScreen> {
 
             return AlertDialog(
               title: const Text("Pembayaran Tunai", style: TextStyle(fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Total Tagihan:", style: TextStyle(fontSize: 16)),
-                        Text("Rp $_cartTotal", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      ],
+              // ========================================================
+              // PERBAIKAN: Tambahkan SingleChildScrollView di sini
+              // ========================================================
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Total Tagihan:", style: TextStyle(fontSize: 16)),
+                          Text(_formatRupiah(_cartTotal), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
-                    decoration: InputDecoration(
-                      labelText: "Uang Diterima (Rp)",
-                      prefixIcon: const Icon(Icons.payments_outlined),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 16),
+                    TextField(
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
+                      decoration: InputDecoration(
+                        labelText: "Uang Diterima (Rp)",
+                        prefixIcon: const Icon(Icons.payments_outlined),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onChanged: (value) => setStateDialog(() => uangDiterima = double.tryParse(value) ?? 0),
                     ),
-                    onChanged: (value) => setStateDialog(() => uangDiterima = double.tryParse(value) ?? 0),
-                  ),
-                  const SizedBox(height: 16),
-                  if (uangDiterima > 0) ...[
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(isUangCukup ? "Kembalian:" : "Uang Kurang:", style: const TextStyle(fontSize: 16)),
-                        Text("Rp ${kembalian.abs()}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isUangCukup ? AppColors.success : Colors.red)),
-                      ],
-                    ),
-                  ]
-                ],
+                    const SizedBox(height: 16),
+                    if (uangDiterima > 0) ...[
+                      const Divider(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(isUangCukup ? "Kembalian:" : "Uang Kurang:", style: const TextStyle(fontSize: 16)),
+                          Text(_formatRupiah(kembalian.abs()), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isUangCukup ? AppColors.success : Colors.red)),
+                        ],
+                      ),
+                    ]
+                  ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
@@ -899,7 +907,7 @@ class _PosScreenState extends State<PosScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, disabledBackgroundColor: Colors.grey[300]),
                   onPressed: (uangDiterima > 0 && isUangCukup) ? () {
                     Navigator.pop(context); 
-                    _prosesBayarKeDatabase("Tunai (Kembali Rp $kembalian)");
+                    _prosesBayarKeDatabase("Tunai (Kembali ${_formatRupiah(kembalian)})");
                   } : null, 
                   child: const Text("Uang Diterima"),
                 )
@@ -1003,7 +1011,7 @@ class _PosScreenState extends State<PosScreen> {
                         child: item['image_url'] == null ? const Icon(Icons.inventory_2, color: Colors.grey) : null,
                       ),
                       title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text("Rp ${item['price']} | Stok: ${item['stock']}"),
+                      subtitle: Text("${_formatRupiah(item['price'])} | Stok: ${item['stock']}"),
                       trailing: ElevatedButton(
                         onPressed: item['stock'] > 0 ? () => _addToCart(item) : null,
                         child: Text(item['stock'] > 0 ? "Tambah" : "Habis"),
@@ -1041,14 +1049,14 @@ class _PosScreenState extends State<PosScreen> {
                               itemBuilder: (context, index) {
                                 final item = _cart[index];
                                 return ListTile(
-                                  contentPadding: EdgeInsets.zero, title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("Rp ${item['price']}"),
+                                  contentPadding: EdgeInsets.zero, title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(_formatRupiah(item['price'])),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red), onPressed: () => _removeFromCart(item['id'])),
                                       Text("${item['qty']}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                       const SizedBox(width: 10),
-                                      SizedBox(width: 80, child: Text("Rp ${item['qty'] * item['price']}", textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                                      SizedBox(width: 80, child: Text(_formatRupiah(item['qty'] * item['price']), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
                                     ],
                                   ),
                                 );
@@ -1066,7 +1074,7 @@ class _PosScreenState extends State<PosScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text("${_cart.fold(0, (sum, item) => sum + (item['qty'] as int))} Barang ditambahkan", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                    Text("Rp $_cartTotal", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                    Text(_formatRupiah(_cartTotal), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
                                   ],
                                 ),
                                 ElevatedButton(

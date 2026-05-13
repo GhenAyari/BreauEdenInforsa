@@ -12,7 +12,6 @@ class LogScreen extends StatefulWidget {
 class _LogScreenState extends State<LogScreen> {
   final _supabase = Supabase.instance.client;
   
-  // PERBAIKAN 1: Ganti Stream jadi List biasa
   List<Map<String, dynamic>> _logList = [];
   bool _isLoading = true;
 
@@ -22,7 +21,6 @@ class _LogScreenState extends State<LogScreen> {
     _tarikDataLog(); 
   }
 
- 
   Future<void> _tarikDataLog() async {
     if (mounted) setState(() => _isLoading = true);
     
@@ -69,7 +67,6 @@ class _LogScreenState extends State<LogScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
-        
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Refresh Data",
@@ -82,10 +79,9 @@ class _LogScreenState extends State<LogScreen> {
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _tarikDataLog, // Fungsi saat layar ditarik ke bawah
+              onRefresh: _tarikDataLog, 
               child: _logList.isEmpty
                   ? ListView(
-                      // Pake ListView kosong biar tetep bisa ditarik layarnya
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: const [
                         SizedBox(height: 300),
@@ -128,8 +124,27 @@ class _LogScreenState extends State<LogScreen> {
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        log['nama_perangkat'] ?? 'Perangkat Lama (Supabase)', 
+                                        log['nama_perangkat'] ?? 'Perangkat Lama', 
                                         style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.bold),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+
+                                // ==========================================
+                                // TAMPILAN LOKASI BARU DI SINI
+                                // ==========================================
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on, size: 14, color: Colors.redAccent),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        log['lokasi'] ?? 'Lokasi Tidak Diketahui', 
+                                        style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
